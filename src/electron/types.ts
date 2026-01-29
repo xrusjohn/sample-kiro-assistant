@@ -1,4 +1,4 @@
-import type { SDKMessage, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
+import type { AgentMessage, AgentPermissionResult } from "../shared/agent-schema.js";
 
 export type ClaudeSettingsEnv = {
   ANTHROPIC_AUTH_TOKEN: string;
@@ -16,7 +16,7 @@ export type UserPromptMessage = {
   prompt: string;
 };
 
-export type StreamMessage = SDKMessage | UserPromptMessage;
+export type StreamMessage = AgentMessage | UserPromptMessage;
 
 export type SessionStatus = "idle" | "running" | "completed" | "error";
 
@@ -24,7 +24,7 @@ export type SessionInfo = {
   id: string;
   title: string;
   status: SessionStatus;
-  claudeSessionId?: string;
+  kiroConversationId?: string;
   cwd?: string;
   createdAt: number;
   updatedAt: number;
@@ -43,10 +43,10 @@ export type ServerEvent =
 
 // Client -> Server events
 export type ClientEvent =
-  | { type: "session.start"; payload: { title: string; prompt: string; cwd?: string; allowedTools?: string } }
-  | { type: "session.continue"; payload: { sessionId: string; prompt: string } }
+  | { type: "session.start"; payload: { title: string; prompt: string; cwd?: string; allowedTools?: string; interactive?: boolean } }
+  | { type: "session.continue"; payload: { sessionId: string; prompt: string; interactive?: boolean } }
   | { type: "session.stop"; payload: { sessionId: string } }
   | { type: "session.delete"; payload: { sessionId: string } }
   | { type: "session.list" }
   | { type: "session.history"; payload: { sessionId: string } }
-  | { type: "permission.response"; payload: { sessionId: string; toolUseId: string; result: PermissionResult } };
+  | { type: "permission.response"; payload: { sessionId: string; toolUseId: string; result: AgentPermissionResult } };

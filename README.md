@@ -1,256 +1,140 @@
+# Agent Cowork (Open Claude Cowork)
 
-<div align="center">
+Agent Cowork is a desktop shell around **Kiro CLI** that turns Anthropic-compatible coding agents into a rich UX with session management, command history, and inline file viewing. It is built for engineers who want the raw power of Kiro’s terminal workflow with the ergonomics of a native macOS app.
 
-# Open Claude Cowork
+- 🚀 **Native Electron desktop app** with React/Tailwind UI
+- 🧠 **Powered by `kiro-cli`** for conversations while still honoring existing `~/.kiro` assets (MCP config, skills, env settings)
+- 🧩 **Full MCP support (stdio + HTTP)** via the Settings dialog—no manual JSON edits required
+- 📂 **Workspace aware**: every session runs against the working directory you select, with file viewers, upload support, and activity tracking
 
-[![Version](https://img.shields.io/badge/version-0.0.2-blue.svg)](https://github.com/DevAgentForge/Claude-Cowork/releases)
-[![Platform](https://img.shields.io/badge/platform-%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/DevAgentForge/Claude-Cowork/releases)
-
-[简体中文](README_ZH.md)
-
-</div>
-
-## ❤️ Collaboration
-
-[![MiniMax](assets/partners/minimax_banner.jpg)](https://platform.minimax.io/subscribe/coding-plan?code=5q2B2ljfdw&source=link)
-
-MiniMax-M2.1 is an open-source SOTA model that excels at coding, navigating digital environments, and handling long, multi-step tasks.
-With Open Source Claude Cowork, M2.1 takes a concrete step toward our long-term vision of general-purpose productivity, making advanced AI capabilities accessible to everyone. 
-
-[Click ](https://platform.minimax.io/subscribe/coding-plan?code=5q2B2ljfdw&source=link) to get an exclusive 12% off the MiniMax Coding Plan
+> The project still ships under the “Open Claude Cowork” name in the UI, but we refer to it as Agent Cowork inside the repo.
 
 ---
 
-# About Open Claude Cowork
+## Model & Provider Compatibility
 
-A **desktop AI assistant** that helps you with **programming, file management, and any task you can describe**.
+Agent Cowork inherits the compatibility surface of **Kiro CLI** (which itself speaks the Anthropic-compatible protocol):
 
-It is **fully compatible with the exact same configuration as Claude Code**, which means you can run it with **any Anthropic-compatible large language model**.
+- **Claude on Amazon Bedrock** – configure Kiro for Bedrock’s Anthropic Runtime endpoint and authenticate with AWS credentials; Cowork will automatically tap into the same settings.
+- **Anthropic public API** – use your Anthropic API key directly.
+- **Any provider that implements the Anthropic-compatible surface**, including:
+  - Kimi K2
+  - MiniMax M2
+  - DeepSeek 3.2
+  - GLM 4.7
 
-> Not just a GUI.  
-> A real AI collaboration partner.  
-> No need to learn the Claude Agent SDK — just create tasks and choose execution paths.
-
-An example of organizing a local folder:
-
-
-https://github.com/user-attachments/assets/8ce58c8b-4024-4c01-82ee-f8d8ed6d4bba
-
+If the provider works in Kiro CLI (same payloads/endpoints), it works in Agent Cowork. Configure the endpoint and credentials once in `~/.claude/settings.json`; both Kiro and Cowork will respect it.
 
 ---
 
-## ✨ Why Claude Cowork?
+## Architecture Overview
 
-Claude Code is powerful — but it **only runs in the terminal**.
+| Layer | Responsibilities | Key Files |
+| ----- | ---------------- | --------- |
+| **Electron Main** | Boots the BrowserWindow, exposes IPC APIs (`read-file`, `run-kiro-command`, MCP helpers), spawns `kiro-cli chat`, and copies uploads into the workspace. | `src/electron/main.ts`, `src/electron/libs/runner.ts`, `src/electron/libs/mcp-config.ts` |
+| **React Renderer** | Zustand store + UI components (sessions, prompt bar, MCP settings, file sidebar, file upload, slash commands). | `src/ui/*` |
+| **Kiro CLI runtime** | The actual agent runtime that talks to Anthropic-compatible APIs, executes tools, runs MCP servers, and writes conversation history to its SQLite store. | `/Applications/Kiro CLI.app` or `kiro-cli` on PATH |
+| **Claude Agent SDK (helper)** | Only used for `generateSessionTitle()` to keep the automatic title suggestion feature. | `src/electron/libs/util.ts` |
+| **Persistence** | Cowork metadata/history via better-sqlite3; conversation bodies live in Kiro’s own DB. | `src/electron/libs/session-store.ts`, `~/Library/Application Support/kiro-cli/data.sqlite3` |
 
-That means:
-- ❌ No visual feedback for complex tasks
-- ❌ Hard to track multiple sessions
-- ❌ Tool outputs are inconvenient to inspect
-
-**Agent Cowork solves these problems:**
-
-- 🖥️ Runs as a **native desktop application**
-- 🤖 Acts as your **AI collaboration partner** for any task
-- 🔁 Reuses your **existing `~/.claude/settings.json`**
-- 🧠 **100% compatible** with Claude Code
-
-If Claude Code works on your machine —  
-**Agent Cowork works too.**
+More detail (including mermaid diagrams and security notes) lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
-## 🚀 Quick Start
+## Key Capabilities
 
-Before using Agent Cowork, make sure Claude Code is installed and properly configured.
-
-### Option 1: Download a Release
-
-👉 [Go to Releases](https://github.com/DevAgentForge/agent-cowork/releases)
+- **Session management** – start/resume/delete sessions per working directory with automatic title suggestions.
+- **Conversation playback** – view Kiro’s reasoning, tool invocations, and status badges inline.
+- **File insights** – FileSidebar previews text/code, renders PDFs, images, spreadsheets, and tracks accessed/created files independently.
+- **Uploads** – drop extra files into the selected workspace via the paperclip icon; Cowork copies them into the directory so Kiro can read/edit them.
+- **MCP integration** – stdio and HTTP servers can be configured entirely from the Settings modal (see below).
+- **Slash & Kiro commands** – `/context`, `/compact`, `/mcp`, etc. run through the same CLI session for parity with the terminal experience.
 
 ---
 
-### Option 2: Build from Source
+## Installing & Running
 
-#### Prerequisites
+### Prerequisites
 
-- [Bun](https://bun.sh/) or Node.js 18+
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+1. **Kiro CLI** installed and authenticated for your provider (Anthropic, Bedrock, Kimi, etc.). Cowork shells out to `kiro-cli chat ...` for every prompt.
+2. **Claude CLI (optional but recommended)** if you want the Settings modal helpers that still execute `claude mcp ...` or `/skills`.
+3. **Bun (preferred) or Node.js 18+** for building.
+4. macOS 13+ (Windows/Linux build targets exist but the shipping app currently focuses on macOS).
 
-bash
-# Clone the repository
-git clone https://github.com/DevAgentForge/agent-cowork.git
-cd agent-cowork
+> Each session gets its own isolated workspace under `~/Documents/workspace-kiro-cowork/<task-id>`. The app manages those folders automatically; use the Upload button to bring files into the task’s workspace instead of manually pointing Coworker at arbitrary directories.
+
+### Steps
+
+```bash
+# Clone
+git clone https://github.com/DevAgentForge/Claude-Cowork.git
+cd Claude-Cowork
 
 # Install dependencies
 bun install
 
-# Run in development mode
-bun run dev
+# Development mode
+bun run dev            # launches Vite + Electron with hot reload
 
-# Or build production binaries
-bun run dist:mac    # macOS
-bun run dist:win    # Windows
-bun run dist:linux  # Linux
-`
+# Production build (macOS arm64)
+bun run dist:mac
+```
 
----
+The macOS bundle is emitted to `dist/mac-arm64/Agent Cowork.app`. Copy it into `/Applications` (back up any previous version first).
 
-## 🧠 Core Capabilities
-
-### 🤖 AI Collaboration Partner — Not Just a GUI
-
-Agent Cowork is your AI partner that can:
-
-* **Write and edit code** — in any programming language
-* **Manage files** — create, move, and organize
-* **Run commands** — build, test, deploy
-* **Answer questions** — about your codebase
-* **Do anything** — as long as you can describe it in natural language
+> Cowork launches `kiro-cli chat --model claude-sonnet-4.5 --agent kiro-coworker` by default. Override with `KIRO_DEFAULT_MODEL` or `KIRO_AGENT` before starting the app if you need different defaults.
 
 ---
 
-### 📂 Session Management
+## MCP Integration & Settings Workflow
 
-* Create sessions with **custom working directories**
-* Resume any previous conversation
-* Complete local session history (stored in SQLite)
-* Safe deletion and automatic persistence
+Agent Cowork now mirrors the configuration that Kiro CLI stores in `~/.kiro/agents/agent_config.json`. The Settings modal is a read-only dashboard with enable/disable toggles—any structural changes still happen via Kiro CLI or by editing the JSON file yourself.
 
----
+1. **Open Settings.** The “Kiro MCP Servers” panel lists every entry from `~/.kiro/agents/agent_config.json`.
+2. **Toggle availability.** Each server exposes a switch that flips the `disabled` flag inside the JSON file, letting you quickly enable or disable HTTP or stdio MCPs without touching the CLI.
+3. **Edit via CLI when needed.** When you need to add/remove servers or change their commands, continue using `kiro-cli`/`claude mcp …` and then hit Refresh in the modal to pick up the changes.
 
-### 🎯 Real-Time Streaming Output
-
-* **Token-by-token streaming output**
-* View Claude’s reasoning process
-* Markdown rendering with syntax-highlighted code
-* Visualized tool calls with status indicators
+The same modal also lists the directories found in `~/.kiro/skills/` so you can jump straight to each skill folder from Cowork. No SKILL.md parsing is required—each directory is treated as a skill.
 
 ---
 
-### 🔐 Tool Permission Control
+## Working With Files
 
-* Explicit approval required for sensitive actions
-* Allow or deny per tool
-* Interactive decision panels
-* Full control over what Claude is allowed to do
-
----
-
-## 🔁 Fully Compatible with Claude Code
-
-Agent Cowork **shares configuration with Claude Code**.
-
-It directly reuses:
-
-text
-~/.claude/settings.json
-
-
-This means:
-
-* Same API keys
-* Same base URL
-* Same models
-* Same behavior
-
-> Configure Claude Code once — use it everywhere.
+- **Accessed vs Created Lists** – the FileBar tracks accessed files separately from created files, preventing duplicates between the sections.
+- **Inline Preview** – clicking supported extensions opens the file in the sidebar; unsupported ones open via the OS (using `shell.openExternal`).
+- **Uploads** – use the paperclip icon beside the prompt. Selected files are copied into the CWD (with collision-safe renaming). Kiro can then use Bash or other tools to inspect them.
 
 ---
 
-## 🧩 Architecture Overview
+## Security & Permissions
 
-| Layer            | Technology                     |
-| ---------------- | ------------------------------ |
-| Framework        | Electron 39                    |
-| Frontend         | React 19, Tailwind CSS 4       |
-| State Management | Zustand                        |
-| Database         | better-sqlite3 (WAL mode)      |
-| AI               | @anthropic-ai/claude-agent-sdk |
-| Build            | Vite, electron-builder         |
+- Tool calls that would affect your system (Bash, file edits, MCP actions) appear as cards where you can approve or deny.
+- The working directory boundary is respected: Kiro CLI runs inside the directory you select, mirroring the CLI experience.
+- External links clicked inside chat always open in your default browser via `shell.openExternal`, keeping the app sandboxed.
+
+Refer to the “Security considerations” section in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a deeper discussion, including current limitations (no kernel-level sandboxing, relies on Kiro CLI permissions, etc.).
 
 ---
 
-## 🛠 Development
+## Troubleshooting Tips
 
-bash
-# Start development server (hot reload)
-bun run dev
-
-# Type checking / build
-bun run build
-
+- **Kiro CLI missing** – make sure `kiro-cli` is installed (set `KIRO_CLI_PATH`, keep `/Applications/Kiro CLI.app`, or add it to your PATH). Cowork cannot start sessions without it.
+- **Claude CLI missing** – only impacts the MCP/skills helpers. Install `claude` if you want to run `claude mcp ...` or `/skills` from the Settings modal.
+- **MCP servers not visible** – open `~/.kiro/agents/agent_config.json` and confirm the entry exists and isn’t marked `disabled: true`, then press Refresh in Settings.
+- **HTTP MCP shows “Unknown command”** – update to the current build; the Settings UI now persists `type: "http"` servers exactly as written.
+- **Slash commands do nothing** – ensure you start a session first; slash commands are routed to the active Kiro CLI session.
 
 ---
 
-## 🧩 AppleScript MCP Server (Optional)
+## Contributing
 
-You can let Claude Cowork control local macOS apps through AppleScript by installing the community [osascript MCP server](https://github.com/k6l3/osascript-dxt):
+1. Fork the repository and branch from `main`.
+2. Run `bun run dev` for iterative changes.
+3. Add/adjust docs (`docs/ARCHITECTURE.md`, this `README`) when touching architecture or user-facing behavior.
+4. Open a PR (GitHub) or MR (GitLab mirror) with a clear summary of the changes and testing steps.
 
-1. Install the MCP bundle CLI: `npm install -g @anthropic-ai/mcpb`
-2. Clone and build the bundle:
-   ```bash
-   git clone https://github.com/k6l3/osascript-dxt
-   cd osascript-dxt
-   mcpb pack
-   ```
-3. Copy the folder somewhere permanent (for example `~/Library/Application Support/Agent Cowork/mcp/osascript-dxt`) and install its dependencies with `bun install`.
-4. Register the server in `~/.claude/settings.json`:
-   ```json
-   {
-     "mcpServers": {
-       "osascript": {
-         "command": "node",
-         "args": [
-           "/Users/<you>/Library/Application Support/Agent Cowork/mcp/osascript-dxt/server/index.js"
-         ],
-         "env": {}
-       }
-     }
-   }
-   ```
-5. Restart Claude Cowork and enable the new `osascript` MCP tool from the Settings modal.
-
-Once configured, you can ask Claude to run AppleScript/osascript commands (with the normal permission prompts) to automate Finder, Mail, Safari, etc.
+If you build something neat—new MCP templates, better HTTP tooling, alternative providers—please share!
 
 ---
 
-## 🗺 Roadmap
-
-Planned features:
-
-* GUI-based configuration for models and API keys
-* 🚧 More features coming soon
-
----
-
-## 🤝 Contributing
-
-Pull requests are welcome.
-
-1. Fork this repository
-2. Create your feature branch
-3. Commit your changes
-4. Open a Pull Request
-
----
-
-## ⭐ Final Words
-
-If you’ve ever wanted:
-
-* A persistent desktop AI collaboration partner
-* Visual insight into how Claude works
-* Convenient session management across projects
-
-This project is built for you.
-
-👉 **If it helps you, please give it a Star.**
-
----
-
-## License
-
-MIT
-
-
+Made with ❤️ to bring Kiro CLI’s power to every desktop. Whether you’re on Anthropic’s Bedrock runtime, Kimi’s endpoints, MiniMax’s coding plan, DeepSeek 3.2, GLM 4.7, or the classic Anthropic API, Agent Cowork gives you the same workflows with a friendlier face. Happy hacking!

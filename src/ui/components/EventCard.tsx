@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import type {
-  PermissionResult,
-  SDKAssistantMessage,
-  SDKMessage,
-  SDKResultMessage,
-  SDKUserMessage
-} from "@anthropic-ai/claude-agent-sdk";
+  AgentAssistantMessage,
+  AgentMessage,
+  AgentPermissionResult,
+  AgentResultMessage,
+  AgentUserMessage
+} from "../../shared/agent-schema.js";
 import type { StreamMessage } from "../types";
 import type { PermissionRequest } from "../store/useAppStore";
 import MDContent from "../render/markdown";
 import { DecisionPanel } from "./DecisionPanel";
 
-type MessageContent = SDKAssistantMessage["message"]["content"][number];
-type ToolResultContent = SDKUserMessage["message"]["content"][number];
+type MessageContent = AgentAssistantMessage["message"]["content"][number];
+type ToolResultContent = AgentUserMessage["message"]["content"][number];
 type ToolStatus = "pending" | "success" | "error";
 const toolStatusMap = new Map<string, ToolStatus>();
 const toolStatusListeners = new Set<() => void>();
@@ -67,7 +67,7 @@ const StatusDot = ({ variant = "accent", isActive = false, isVisible = true }: {
   );
 };
 
-const SessionResult = ({ message }: { message: SDKResultMessage }) => {
+const SessionResult = ({ message }: { message: AgentResultMessage }) => {
   const formatMinutes = (ms: number | undefined) => typeof ms !== "number" ? "-" : `${(ms / 60000).toFixed(2)} min`;
   const formatUsd = (usd: number | undefined) => typeof usd !== "number" ? "-" : usd.toFixed(2);
   const formatMillions = (tokens: number | undefined) => typeof tokens !== "number" ? "-" : `${(tokens / 1_000_000).toFixed(4)} M`;
@@ -211,7 +211,7 @@ const AskUserQuestionCard = ({
 }: {
   messageContent: MessageContent;
   permissionRequest?: PermissionRequest;
-  onPermissionResult?: (toolUseId: string, result: PermissionResult) => void;
+  onPermissionResult?: (toolUseId: string, result: AgentPermissionResult) => void;
 }) => {
   if (messageContent.type !== "tool_use") return null;
   
@@ -245,7 +245,7 @@ const AskUserQuestionCard = ({
   );
 };
 
-const SystemInfoCard = ({ message, showIndicator = false }: { message: SDKMessage; showIndicator?: boolean }) => {
+const SystemInfoCard = ({ message, showIndicator = false }: { message: AgentMessage; showIndicator?: boolean }) => {
   if (message.type !== "system" || !("subtype" in message) || message.subtype !== "init") return null;
   
   const systemMsg = message as any;
@@ -294,7 +294,7 @@ export function MessageCard({
   isLast?: boolean;
   isRunning?: boolean;
   permissionRequest?: PermissionRequest;
-  onPermissionResult?: (toolUseId: string, result: PermissionResult) => void;
+  onPermissionResult?: (toolUseId: string, result: AgentPermissionResult) => void;
 }) {
   const showIndicator = isLast && isRunning;
 
@@ -302,7 +302,7 @@ export function MessageCard({
     return <UserMessageCard message={message} showIndicator={showIndicator} />;
   }
 
-  const sdkMessage = message as SDKMessage;
+  const sdkMessage = message as AgentMessage;
 
   if (sdkMessage.type === "system") {
     return <SystemInfoCard message={sdkMessage} showIndicator={showIndicator} />;

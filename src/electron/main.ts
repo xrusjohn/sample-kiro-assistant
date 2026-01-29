@@ -11,14 +11,17 @@ import { getPreloadPath, getUIPath, getIconPath } from "./pathResolver.js";
 import { getStaticData, pollResources } from "./test.js";
 import { handleClientEvent, sessions } from "./ipc-handlers.js";
 import { generateSessionTitle, enhancedEnv, normalizeWorkingDirectory } from "./libs/util.js";
-import { loadMcpServers, saveMcpServers, getClaudeSettingsPath } from "./libs/mcp-config.js";
+import { resolveKiroCliBinary } from "./libs/kiro-cli.js";
+import { getKiroMcpSettingsPath, loadKiroMcpServers, setKiroMcpServerDisabled } from "./libs/mcp-config.js";
+import { ensureWorkspaceRoot } from "./libs/workspace.js";
+import { loadSkills } from "./libs/skill-loader.js";
 import type { ClientEvent } from "./types.js";
-import type { McpServerConfig, McpServersMap } from "../shared/mcp.js";
 import "./libs/claude-settings.js";
 
 const execAsync = promisify(exec);
 
 app.on("ready", () => {
+    ensureWorkspaceRoot();
     const mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
@@ -238,69 +241,46 @@ app.on("ready", () => {
         }
     });
 
-    ipcMainHandle("get-mcp-servers", async (_: any, cwd?: string) => {
+    ipcMainHandle("get-kiro-mcp-servers", async () => {
         try {
-            const servers = await loadMcpServers(cwd);
+            const { servers, path } = await loadKiroMcpServers();
             return {
                 success: true,
                 servers,
-                settingsPath: getClaudeSettingsPath(),
-                cwd
+                settingsPath: path
             };
         } catch (error: any) {
             return {
                 success: false,
-                error: error?.message ?? "Failed to load MCP servers",
                 servers: {},
-                settingsPath: getClaudeSettingsPath(),
-                cwd
+                error: error?.message ?? "Failed to load MCP servers",
+                settingsPath: getKiroMcpSettingsPath()
             };
         }
     });
 
-    ipcMainHandle("save-mcp-servers", async (_: any, payload: { cwd: string; servers: unknown }) => {
+    ipcMainHandle("set-kiro-mcp-disabled", async (_: any, payload: { name: string; disabled: boolean }) => {
         try {
-            const normalized = normalizeMcpServers(payload?.servers);
-            const servers = await saveMcpServers(payload?.cwd, normalized);
+            const name = payload?.name?.trim();
+            if (!name) {
+                throw new Error("Server name is required.");
+            }
+            const servers = await setKiroMcpServerDisabled(name, payload?.disabled ?? false);
             return {
                 success: true,
                 servers,
-                settingsPath: getClaudeSettingsPath(),
-                cwd: payload?.cwd
+                settingsPath: getKiroMcpSettingsPath()
             };
         } catch (error: any) {
             return {
                 success: false,
-                error: error?.message ?? "Failed to save MCP servers",
-                settingsPath: getClaudeSettingsPath(),
-                cwd: payload?.cwd
+                error: error?.message ?? "Failed to update MCP server",
+                settingsPath: getKiroMcpSettingsPath()
             };
         }
     });
 
-    ipcMainHandle("run-npx-install", async (_: any, payload: { cwd: string; command: string }) => {
-        const cwd = payload?.cwd?.trim();
-        const command = payload?.command?.trim();
-        if (!cwd) {
-            return { success: false, error: "Working directory is required." };
-        }
-        if (!command) {
-            return { success: false, error: "Command is required." };
-        }
-        try {
-            const { stdout, stderr } = await execAsync(command, { cwd, env: enhancedEnv });
-            return { success: true, stdout, stderr };
-        } catch (error: any) {
-            return {
-                success: false,
-                error: error?.message ?? "Failed to run command",
-                stdout: error?.stdout,
-                stderr: error?.stderr
-            };
-        }
-    });
-
-    ipcMainHandle("run-claude-command", async (_: any, payload: { cwd: string; command: string }) => {
+    ipcMainHandle("run-kiro-command", async (_: any, payload: { cwd: string; command: string }) => {
         const normalizedCwd = normalizeWorkingDirectory(payload?.cwd) ?? process.cwd();
         let command = payload?.command?.trim();
         if (!command) {
@@ -312,11 +292,21 @@ app.on("ready", () => {
         if (!command) {
             return { success: false, error: "Command is required." };
         }
+        const binary = resolveKiroCliBinary();
+        if (!binary) {
+            return { success: false, error: "kiro-cli is not installed or not found on PATH." };
+        }
         try {
-            const fullCommand = `claude ${command}`;
+            const quotedBinary = binary.includes(" ") ? `"${binary}"` : binary;
+            const fullCommand = `${quotedBinary} ${command}`;
             const { stdout, stderr } = await execAsync(fullCommand, {
                 cwd: normalizedCwd,
-                env: enhancedEnv
+                env: {
+                    ...enhancedEnv,
+                    NO_COLOR: "1",
+                    CLICOLOR: "0",
+                    KIRO_CLI_DISABLE_PAGER: "1"
+                }
             });
             return { success: true, stdout, stderr };
         } catch (error: any) {
@@ -377,6 +367,24 @@ app.on("ready", () => {
             failed: failed.length ? failed : undefined,
             error: success ? undefined : (failed[0]?.error ?? "Failed to copy files")
         };
+    });
+
+    ipcMainHandle("get-skills", async () => {
+        try {
+            const fsResult = await loadSkills();
+            return {
+                success: true,
+                user: fsResult.user,
+                project: fsResult.project
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                error: error?.message ?? "Failed to load skills",
+                user: [],
+                project: []
+            };
+        }
     });
 })
 
@@ -546,18 +554,4 @@ async function extractPptSlides(filePath: string): Promise<PptSlide[]> {
             slideNumber: extractSlideNumber(entry.name),
             paragraphs: extractParagraphs(entry.data)
         }));
-}
-function normalizeMcpServers(payload: unknown): McpServersMap {
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-        throw new Error("Invalid MCP server payload");
-    }
-
-    const result: McpServersMap = {};
-    for (const [name, config] of Object.entries(payload as Record<string, unknown>)) {
-        if (!config || typeof config !== "object" || Array.isArray(config)) {
-            throw new Error(`Invalid configuration for MCP server "${name}"`);
-        }
-        result[name] = config as McpServerConfig;
-    }
-    return result;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
+import type { AgentPermissionResult } from "../shared/agent-schema.js";
 import { useIPC } from "./hooks/useIPC";
 import { useAppStore } from "./store/useAppStore";
 import type { ServerEvent, CreatedFile } from "./types";
@@ -34,8 +34,6 @@ function App() {
   const handleServerEvent = useAppStore((s) => s.handleServerEvent);
   const prompt = useAppStore((s) => s.prompt);
   const setPrompt = useAppStore((s) => s.setPrompt);
-  const cwd = useAppStore((s) => s.cwd);
-  const setCwd = useAppStore((s) => s.setCwd);
   const pendingStart = useAppStore((s) => s.pendingStart);
 
   // File sidebar state
@@ -98,7 +96,7 @@ function App() {
   }, [handleServerEvent, handlePartialMessages]);
 
   const { connected, sendEvent } = useIPC(onEvent);
-  const { handleStartFromModal } = usePromptActions(sendEvent);
+  const promptActions = usePromptActions(sendEvent);
 
   const activeSession = activeSessionId ? sessions[activeSessionId] : undefined;
   const messages = activeSession?.messages ?? [];
@@ -179,7 +177,7 @@ function App() {
     sendEvent({ type: "session.delete", payload: { sessionId } });
   }, [sendEvent]);
 
-  const handlePermissionResult = useCallback((toolUseId: string, result: PermissionResult) => {
+  const handlePermissionResult = useCallback((toolUseId: string, result: AgentPermissionResult) => {
     if (!activeSessionId) return;
     sendEvent({ type: "permission.response", payload: { sessionId: activeSessionId, toolUseId, result } });
     resolvePermissionRequest(activeSessionId, toolUseId);
@@ -202,7 +200,7 @@ function App() {
           className="flex items-center justify-center h-12 border-b border-ink-900/10 bg-surface-cream select-none"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
-          <span className="text-sm font-medium text-ink-700">{activeSession?.title || "Agent Cowork"}</span>
+          <span className="text-sm font-medium text-ink-700">{activeSession?.title || "Kiro Cowork"}</span>
         </div>
 
         <div className="flex-1 overflow-y-auto px-8 pb-40 pt-6">
@@ -210,7 +208,7 @@ function App() {
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="text-lg font-medium text-ink-700">No messages yet</div>
-                <p className="mt-2 text-sm text-muted">Start a conversation with Claude Code</p>
+                <p className="mt-2 text-sm text-muted">Start a conversation with Kiro Coworker</p>
               </div>
             ) : (
               messages.map((msg, idx) => (
@@ -262,7 +260,7 @@ function App() {
           onOpenExternal={handleOpenExternal}
         />
 
-        <PromptInput sendEvent={sendEvent} />
+        <PromptInput actions={promptActions} />
       </main>
 
       {fileSidebarOpen && (
@@ -281,12 +279,10 @@ function App() {
 
       {showStartModal && (
         <StartSessionModal
-          cwd={cwd}
           prompt={prompt}
           pendingStart={pendingStart}
-          onCwdChange={setCwd}
           onPromptChange={setPrompt}
-          onStart={handleStartFromModal}
+          onStart={promptActions.handleStartFromModal}
           onClose={() => setShowStartModal(false)}
         />
       )}
@@ -307,7 +303,7 @@ function App() {
         </div>
       )}
       {commandResult && (
-        <div className="fixed bottom-40 left-1/2 z-50 w-[90%] max-w-3xl -translate-x-1/2 rounded-xl border border-ink-900/10 bg-white px-4 py-3 shadow-lg">
+        <div className="fixed bottom-40 left-1/2 z-50 w-[90%] max-w-3xl -translate-x-1/2 rounded-xl border border-ink-900/10 bg-surface-secondary px-4 py-3 shadow-lg">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs font-semibold uppercase text-muted tracking-wide">Claude command</div>

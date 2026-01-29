@@ -41,16 +41,16 @@ electron.contextBridge.exposeInMainWorld("electron", {
         ipcInvoke("open-external-url", url),
     fileExists: (filePath: string) =>
         ipcInvoke("file-exists", filePath),
-    getMcpServers: (cwd?: string) =>
-        ipcInvoke("get-mcp-servers", cwd),
-    saveMcpServers: (payload: { cwd: string; servers: McpServersMap }) =>
-        ipcInvoke("save-mcp-servers", payload),
-    runNpxInstall: (payload: NpxInstallPayload) =>
-        ipcInvoke("run-npx-install", payload),
-    runClaudeCommand: (payload: ClaudeCommandPayload) =>
-        ipcInvoke("run-claude-command", payload),
+    getKiroMcpServers: () =>
+        ipcInvoke("get-kiro-mcp-servers"),
+    setKiroMcpDisabled: (payload: ToggleKiroMcpPayload) =>
+        ipcInvoke("set-kiro-mcp-disabled", payload),
+    runKiroCommand: (payload: KiroCommandPayload) =>
+        ipcInvoke("run-kiro-command", payload),
     copyFilesToCwd: (payload: CopyFilesPayload) =>
-        ipcInvoke("copy-files-to-cwd", payload)
+        ipcInvoke("copy-files-to-cwd", payload),
+    getSkills: () =>
+        ipcInvoke("get-skills")
 } satisfies Window['electron'])
 
 function ipcInvoke<Key extends keyof EventPayloadMapping>(key: Key, ...args: any[]): Promise<EventPayloadMapping[Key]> {

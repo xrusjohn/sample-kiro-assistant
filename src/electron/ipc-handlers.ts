@@ -5,6 +5,7 @@ import { SessionStore } from "./libs/session-store.js";
 import { app } from "electron";
 import { join } from "path";
 import { normalizeWorkingDirectory } from "./libs/util.js";
+import { createWorkspaceDirectory } from "./libs/workspace.js";
 
 const DB_PATH = join(app.getPath("userData"), "sessions.db");
 const sessions = new SessionStore(DB_PATH);
@@ -64,12 +65,16 @@ export function handleClientEvent(event: ClientEvent) {
   }
 
   if (event.type === "session.start") {
-    const normalizedCwd = normalizeWorkingDirectory(event.payload.cwd);
+    let normalizedCwd = normalizeWorkingDirectory(event.payload.cwd);
+    if (!normalizedCwd) {
+      normalizedCwd = createWorkspaceDirectory();
+    }
     const session = sessions.createSession({
       cwd: normalizedCwd,
       title: event.payload.title,
       allowedTools: event.payload.allowedTools,
-      prompt: event.payload.prompt
+      prompt: event.payload.prompt,
+      interactive: Boolean(event.payload.interactive)
     });
 
     sessions.updateSession(session.id, {
@@ -89,7 +94,7 @@ export function handleClientEvent(event: ClientEvent) {
     runClaude({
       prompt: event.payload.prompt,
       session,
-      resumeSessionId: session.claudeSessionId,
+      resumeSessionId: session.kiroConversationId,
       onEvent: emit,
       onSessionUpdate: (updates) => {
         sessions.updateSession(session.id, updates);
@@ -126,7 +131,7 @@ export function handleClientEvent(event: ClientEvent) {
       return;
     }
 
-    if (!session.claudeSessionId) {
+    if (!session.kiroConversationId) {
       emit({
         type: "runner.error",
         payload: { sessionId: session.id, message: "Session has no resume id yet." }
@@ -134,6 +139,8 @@ export function handleClientEvent(event: ClientEvent) {
       return;
     }
 
+    const interactive = event.payload.interactive ?? session.interactive ?? false;
+    session.interactive = Boolean(interactive);
     sessions.updateSession(session.id, { status: "running", lastPrompt: event.payload.prompt });
     emit({
       type: "session.status",
@@ -148,7 +155,7 @@ export function handleClientEvent(event: ClientEvent) {
     runClaude({
       prompt: event.payload.prompt,
       session,
-      resumeSessionId: session.claudeSessionId,
+      resumeSessionId: session.kiroConversationId,
       onEvent: emit,
       onSessionUpdate: (updates) => {
         sessions.updateSession(session.id, updates);

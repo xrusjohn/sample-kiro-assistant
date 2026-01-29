@@ -11,11 +11,13 @@ export type PendingPermission = {
 export type Session = {
   id: string;
   title: string;
-  claudeSessionId?: string;
+  kiroConversationId?: string;
+  kiroHistoryCursor?: number;
   status: SessionStatus;
   cwd?: string;
   allowedTools?: string;
   lastPrompt?: string;
+  interactive?: boolean;
   pendingPermissions: Map<string, PendingPermission>;
   abortController?: AbortController;
 };
@@ -27,7 +29,8 @@ export type StoredSession = {
   cwd?: string;
   allowedTools?: string;
   lastPrompt?: string;
-  claudeSessionId?: string;
+  kiroConversationId?: string;
+  kiroHistoryCursor?: number;
   createdAt: number;
   updatedAt: number;
 };
@@ -47,7 +50,7 @@ export class SessionStore {
     this.loadSessions();
   }
 
-  createSession(options: { cwd?: string; allowedTools?: string; prompt?: string; title: string }): Session {
+  createSession(options: { cwd?: string; allowedTools?: string; prompt?: string; title: string; interactive?: boolean }): Session {
     const id = crypto.randomUUID();
     const now = Date.now();
     const session: Session = {
@@ -57,19 +60,23 @@ export class SessionStore {
       cwd: options.cwd,
       allowedTools: options.allowedTools,
       lastPrompt: options.prompt,
+      interactive: options.interactive ?? false,
+      kiroHistoryCursor: 0,
       pendingPermissions: new Map()
     };
     this.sessions.set(id, session);
     this.db
       .prepare(
         `insert into sessions
-          (id, title, claude_session_id, status, cwd, allowed_tools, last_prompt, created_at, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          (id, title, claude_session_id, kiro_conversation_id, kiro_history_cursor, status, cwd, allowed_tools, last_prompt, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
         session.title,
-        session.claudeSessionId ?? null,
+        null,
+        session.kiroConversationId ?? null,
+        session.kiroHistoryCursor ?? 0,
         session.status,
         session.cwd ?? null,
         session.allowedTools ?? null,
@@ -87,7 +94,7 @@ export class SessionStore {
   listSessions(): StoredSession[] {
     const rows = this.db
       .prepare(
-        `select id, title, claude_session_id, status, cwd, allowed_tools, last_prompt, created_at, updated_at
+        `select id, title, claude_session_id, kiro_conversation_id, kiro_history_cursor, status, cwd, allowed_tools, last_prompt, created_at, updated_at
          from sessions
          order by updated_at desc`
       )
@@ -99,7 +106,12 @@ export class SessionStore {
       cwd: row.cwd ? String(row.cwd) : undefined,
       allowedTools: row.allowed_tools ? String(row.allowed_tools) : undefined,
       lastPrompt: row.last_prompt ? String(row.last_prompt) : undefined,
-      claudeSessionId: row.claude_session_id ? String(row.claude_session_id) : undefined,
+      kiroConversationId: row.kiro_conversation_id
+        ? String(row.kiro_conversation_id)
+        : row.claude_session_id
+          ? String(row.claude_session_id)
+          : undefined,
+      kiroHistoryCursor: typeof row.kiro_history_cursor === "number" ? Number(row.kiro_history_cursor) : 0,
       createdAt: Number(row.created_at),
       updatedAt: Number(row.updated_at)
     }));
@@ -122,7 +134,7 @@ export class SessionStore {
   getSessionHistory(id: string): SessionHistory | null {
     const sessionRow = this.db
       .prepare(
-        `select id, title, claude_session_id, status, cwd, allowed_tools, last_prompt, created_at, updated_at
+        `select id, title, claude_session_id, kiro_conversation_id, kiro_history_cursor, status, cwd, allowed_tools, last_prompt, created_at, updated_at
          from sessions
          where id = ?`
       )
@@ -144,7 +156,12 @@ export class SessionStore {
         cwd: sessionRow.cwd ? String(sessionRow.cwd) : undefined,
         allowedTools: sessionRow.allowed_tools ? String(sessionRow.allowed_tools) : undefined,
         lastPrompt: sessionRow.last_prompt ? String(sessionRow.last_prompt) : undefined,
-        claudeSessionId: sessionRow.claude_session_id ? String(sessionRow.claude_session_id) : undefined,
+        kiroConversationId: sessionRow.kiro_conversation_id
+          ? String(sessionRow.kiro_conversation_id)
+          : sessionRow.claude_session_id
+            ? String(sessionRow.claude_session_id)
+            : undefined,
+        kiroHistoryCursor: typeof sessionRow.kiro_history_cursor === "number" ? Number(sessionRow.kiro_history_cursor) : 0,
         createdAt: Number(sessionRow.created_at),
         updatedAt: Number(sessionRow.updated_at)
       },
@@ -190,7 +207,8 @@ export class SessionStore {
     const fields: string[] = [];
     const values: Array<string | number | null> = [];
     const updatable = {
-      claudeSessionId: "claude_session_id",
+      kiroConversationId: "kiro_conversation_id",
+      kiroHistoryCursor: "kiro_history_cursor",
       status: "status",
       cwd: "cwd",
       allowedTools: "allowed_tools",
@@ -202,7 +220,7 @@ export class SessionStore {
       if (!column) continue;
       fields.push(`${column} = ?`);
       const value = updates[key];
-      values.push(value === undefined ? null : (value as string));
+      values.push(value === undefined ? null : value);
     }
 
     if (fields.length === 0) return;
@@ -221,6 +239,8 @@ export class SessionStore {
         id text primary key,
         title text,
         claude_session_id text,
+        kiro_conversation_id text,
+        kiro_history_cursor integer default 0,
         status text not null,
         cwd text,
         allowed_tools text,
@@ -229,6 +249,19 @@ export class SessionStore {
         updated_at integer not null
       )`
     );
+
+    const columns = this.db.prepare("pragma table_info(sessions)").all() as Array<{ name: string }>;
+    const columnNames = new Set(columns.map((column) => column.name));
+    if (!columnNames.has("kiro_conversation_id")) {
+      this.db.exec(`alter table sessions add column kiro_conversation_id text`);
+      this.db.exec(
+        `update sessions set kiro_conversation_id = claude_session_id where kiro_conversation_id is null and claude_session_id is not null`
+      );
+    }
+    if (!columnNames.has("kiro_history_cursor")) {
+      this.db.exec(`alter table sessions add column kiro_history_cursor integer default 0`);
+      this.db.exec(`update sessions set kiro_history_cursor = 0 where kiro_history_cursor is null`);
+    }
     this.db.exec(
       `create table if not exists messages (
         id text primary key,
@@ -244,7 +277,7 @@ export class SessionStore {
   private loadSessions(): void {
     const rows = this.db
       .prepare(
-        `select id, title, claude_session_id, status, cwd, allowed_tools, last_prompt
+        `select id, title, claude_session_id, kiro_conversation_id, kiro_history_cursor, status, cwd, allowed_tools, last_prompt
          from sessions`
       )
       .all();
@@ -252,11 +285,17 @@ export class SessionStore {
       const session: Session = {
         id: String(row.id),
         title: String(row.title),
-        claudeSessionId: row.claude_session_id ? String(row.claude_session_id) : undefined,
+        kiroConversationId: row.kiro_conversation_id
+          ? String(row.kiro_conversation_id)
+          : row.claude_session_id
+            ? String(row.claude_session_id)
+            : undefined,
+        kiroHistoryCursor: typeof row.kiro_history_cursor === "number" ? Number(row.kiro_history_cursor) : 0,
         status: row.status as SessionStatus,
         cwd: row.cwd ? String(row.cwd) : undefined,
         allowedTools: row.allowed_tools ? String(row.allowed_tools) : undefined,
         lastPrompt: row.last_prompt ? String(row.last_prompt) : undefined,
+        interactive: false,
         pendingPermissions: new Map()
       };
       this.sessions.set(session.id, session);

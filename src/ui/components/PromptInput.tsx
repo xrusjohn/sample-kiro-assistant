@@ -3,124 +3,101 @@ import type { ClientEvent } from "../types";
 import { useAppStore } from "../store/useAppStore";
 import { useEffectiveCwd } from "../hooks/useEffectiveCwd";
 
-const DEFAULT_ALLOWED_TOOLS = "Read,Edit,Bash";
+const DEFAULT_ALLOWED_TOOLS = "Read,Edit,Bash,Skill";
 const MAX_ROWS = 12;
 const LINE_HEIGHT = 21;
 const MAX_HEIGHT = MAX_ROWS * LINE_HEIGHT;
 
 interface PromptInputProps {
-  sendEvent: (event: ClientEvent) => void;
+  actions: ReturnType<typeof usePromptActions>;
 }
 
-export function usePromptActions(sendEvent: (event: ClientEvent) => void, effectiveCwd?: string) {
-  const prompt = useAppStore((state) => state.prompt);
+export function usePromptActions(sendEvent: (event: ClientEvent) => void) {
   const activeSessionId = useAppStore((state) => state.activeSessionId);
   const sessions = useAppStore((state) => state.sessions);
-  const setPrompt = useAppStore((state) => state.setPrompt);
   const setPendingStart = useAppStore((state) => state.setPendingStart);
   const setGlobalError = useAppStore((state) => state.setGlobalError);
   const setShowStartModal = useAppStore((state) => state.setShowStartModal);
-  const cwd = useAppStore((state) => state.cwd);
   const setCommandResult = useAppStore((state) => state.setCommandResult);
+  const cliInteractive = useAppStore((state) => state.cliInteractive);
+  const startPrompt = useAppStore((state) => state.prompt);
+  const setStartPrompt = useAppStore((state) => state.setPrompt);
 
   const activeSession = activeSessionId ? sessions[activeSessionId] : undefined;
   const isRunning = activeSession?.status === "running";
 
-  const runSlashCommand = useCallback(async (raw: string) => {
-    const trimmed = raw.trim();
-    const workingDir = cwd.trim();
-    if (!trimmed) return;
-    if (!workingDir) {
-      setGlobalError("Set a working directory before running commands.");
-      return;
-    }
-    const payload = trimmed.startsWith("/") ? trimmed.slice(1).trim() : trimmed;
-    if (!payload) {
-      setGlobalError("Command is empty.");
-      return;
-    }
-    try {
-      const result = await window.electron.runClaudeCommand({ cwd: workingDir, command: payload });
-      setCommandResult({
-        command: trimmed,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        error: result.success ? undefined : (result.error || "Command failed"),
-        createdAt: Date.now()
-      });
-    } catch (error) {
-      setCommandResult({
-        command: trimmed,
-        error: error instanceof Error ? error.message : "Failed to run command",
-        createdAt: Date.now()
-      });
-    }
-  }, [cwd, setCommandResult, setGlobalError]);
-
-  const handleSend = useCallback(async () => {
-    if (!prompt.trim()) return;
-
-    if (prompt.trim().startsWith("/")) {
-      const workingDir = (effectiveCwd ?? cwd)?.trim();
+  const runSlashCommand = useCallback(
+    async (raw: string) => {
+      const trimmed = raw.trim();
+      const workingDir = activeSession?.cwd?.trim();
+      if (!trimmed) return;
       if (!workingDir) {
-        setGlobalError("Set a working directory before running commands.");
+        setGlobalError("Start a session before running slash commands.");
         return;
       }
-      const command = prompt.trim().slice(1).trim();
-      if (!command) {
+      const payload = trimmed.startsWith("/") ? trimmed.slice(1).trim() : trimmed;
+      if (!payload) {
         setGlobalError("Command is empty.");
         return;
       }
       try {
-        const result = await window.electron.runClaudeCommand({ cwd: workingDir, command });
+        const result = await window.electron.runKiroCommand({ cwd: workingDir, command: payload });
         setCommandResult({
-          command: `/${command}`,
+          command: trimmed,
           stdout: result.stdout,
           stderr: result.stderr,
-          error: result.success ? undefined : (result.error || "Command failed"),
+          error: result.success ? undefined : result.error || "Command failed",
           createdAt: Date.now()
         });
       } catch (error) {
         setCommandResult({
-          command: `/${command}`,
+          command: trimmed,
           error: error instanceof Error ? error.message : "Failed to run command",
           createdAt: Date.now()
         });
       }
-      setPrompt("");
-      return;
-    }
+    },
+    [activeSession, setCommandResult, setGlobalError]
+  );
 
-    if (prompt.trim().startsWith("/")) {
-      await runSlashCommand(prompt);
-      setPrompt("");
-      return;
-    }
+  const sendPrompt = useCallback(
+    async (text: string) => {
+      const prompt = text.trim();
+      if (!prompt) return;
 
-    if (!activeSessionId) {
-      let title = "";
-      try {
-        setPendingStart(true);
-        title = await window.electron.generateSessionTitle(prompt);
-      } catch (error) {
-        console.error(error);
-        setPendingStart(false);
-        setGlobalError("Failed to get session title.");
+      if (prompt.startsWith("/")) {
+        await runSlashCommand(prompt);
         return;
       }
-      sendEvent({
-        type: "session.start",
-        payload: { title, prompt, cwd: cwd.trim() || undefined, allowedTools: DEFAULT_ALLOWED_TOOLS }
-      });
-    } else {
-      if (activeSession?.status === "running") {
-        setGlobalError("Session is still running. Please wait for it to finish.");
-        return;
+
+      if (!activeSessionId) {
+        let title = "";
+        try {
+          setPendingStart(true);
+          title = await window.electron.generateSessionTitle(prompt);
+        } catch (error) {
+          console.error(error);
+          setPendingStart(false);
+          setGlobalError("Failed to get session title.");
+          return;
+        }
+        sendEvent({
+          type: "session.start",
+          payload: { title, prompt, allowedTools: DEFAULT_ALLOWED_TOOLS, interactive: cliInteractive }
+        });
+      } else {
+        if (isRunning) {
+          setGlobalError("Session is still running. Please wait for it to finish.");
+          return;
+        }
+        sendEvent({
+          type: "session.continue",
+          payload: { sessionId: activeSessionId, prompt, interactive: cliInteractive }
+        });
       }
-      sendEvent({ type: "session.continue", payload: { sessionId: activeSessionId, prompt } });
-    }
-    setPrompt("");
-  }, [activeSession, activeSessionId, cwd, prompt, sendEvent, setGlobalError, setPendingStart, setPrompt, effectiveCwd, setCommandResult]);
+    },
+    [activeSessionId, cliInteractive, isRunning, runSlashCommand, sendEvent, setGlobalError, setPendingStart]
+  );
 
   const handleStop = useCallback(() => {
     if (!activeSessionId) return;
@@ -128,31 +105,31 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void, effect
   }, [activeSessionId, sendEvent]);
 
   const handleStartFromModal = useCallback(() => {
-    if (!cwd.trim()) {
-      setGlobalError("Working Directory is required to start a session.");
-      return;
-    }
-    if (!prompt.trim()) {
+    const prompt = startPrompt.trim();
+    if (!prompt) {
       setShowStartModal(false);
       return;
     }
-    handleSend();
-  }, [cwd, handleSend, prompt, setGlobalError, setShowStartModal]);
+    sendPrompt(prompt);
+    setStartPrompt("");
+    setShowStartModal(false);
+  }, [sendPrompt, setShowStartModal, setStartPrompt, startPrompt]);
 
-  return { prompt, setPrompt, isRunning, handleSend, handleStop, handleStartFromModal };
+  return { sendPrompt, handleStop, handleStartFromModal, isRunning };
 }
 
-export function PromptInput({ sendEvent }: PromptInputProps) {
+export function PromptInput({ actions }: PromptInputProps) {
   const effectiveCwd = useEffectiveCwd();
-  const { prompt, setPrompt, isRunning, handleSend, handleStop } = usePromptActions(sendEvent, effectiveCwd);
+  const { sendPrompt, handleStop, isRunning } = actions;
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
+  const [prompt, setPrompt] = useState("");
   const [uploadMessage, setUploadMessage] = useState<{ text: string; variant: "success" | "error" } | null>(null);
 
   const handleUpload = useCallback(async () => {
     setUploadMessage(null);
     const cwd = effectiveCwd?.trim();
     if (!cwd) {
-      setUploadMessage({ text: "Set a working directory before uploading files.", variant: "error" });
+      setUploadMessage({ text: "Start a session before uploading files.", variant: "error" });
       return;
     }
     const selected = await window.electron.selectFiles();
@@ -174,10 +151,19 @@ export function PromptInput({ sendEvent }: PromptInputProps) {
     });
   }, [effectiveCwd]);
 
+  const handleSend = useCallback(async () => {
+    if (!prompt.trim()) return;
+    await sendPrompt(prompt);
+    setPrompt("");
+  }, [prompt, sendPrompt]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key !== "Enter" || e.shiftKey) return;
     e.preventDefault();
-    if (isRunning) { handleStop(); return; }
+    if (isRunning) {
+      handleStop();
+      return;
+    }
     handleSend();
   };
 

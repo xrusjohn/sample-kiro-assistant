@@ -3,28 +3,28 @@
 
 @theme {
   /* Surface colors */
-  --color-surface: #FFFFFF;
-  --color-surface-secondary: #F5F4F1;
-  --color-surface-tertiary: #EFEEE9;
-  --color-surface-cream: #FAF9F6;
+  --color-surface: #0D0A1A;
+  --color-surface-secondary: #171533;
+  --color-surface-tertiary: #201C3F;
+  --color-surface-cream: #1A1735;
   
   /* Ink colors */
-  --color-ink-900: #1A1915;
-  --color-ink-800: #2D2D2A;
-  --color-ink-700: #4A4A45;
-  --color-ink-600: #666661;
-  --color-ink-500: #7A7A75;
-  --color-ink-400: #9B9B96;
+  --color-ink-900: #F7F3FF;
+  --color-ink-800: #E5DFFF;
+  --color-ink-700: #CFC5F3;
+  --color-ink-600: #ADA4D6;
+  --color-ink-500: #8F86BB;
+  --color-ink-400: #73669B;
   
   /* Muted colors */
-  --color-muted: #6B6B66;
-  --color-muted-light: #9B9B96;
+  --color-muted: #A29CC5;
+  --color-muted-light: #7E739F;
   
   /* Accent colors (Claude orange) */
-  --color-accent: #D97757;
-  --color-accent-hover: #CC785C;
-  --color-accent-light: #F5D0C5;
-  --color-accent-subtle: #FDF4F1;
+  --color-accent: #B576FF;
+  --color-accent-hover: #9E5BFF;
+  --color-accent-light: #3B1E63;
+  --color-accent-subtle: #27133C;
   
   /* Status colors */
   --color-error: #DC2626;
@@ -35,11 +35,11 @@
   --color-info-light: #DBEAFE;
   
   /* Background colors */
-  --color-bg-000: #FFFFFF;
-  --color-bg-100: #FAF9F6;
-  --color-bg-200: #F5F4F1;
-  --color-bg-300: #EFEEE9;
-  --color-bg-400: #E5E4DF;
+  --color-bg-000: #070511;
+  --color-bg-100: #0D0A1A;
+  --color-bg-200: #171533;
+  --color-bg-300: #201C3F;
+  --color-bg-400: #2A254C;
   
   /* Shadows */
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.05);

@@ -1,440 +1,286 @@
 # Agent Cowork Architecture
 
+## Stack Snapshot
+
+- **Electron main** (`src/electron/main.ts`, `src/electron/ipc-handlers.ts`) boots the `BrowserWindow`, wires IPC handlers, proxies file operations, fans out renderer events, and publishes desktop-only helpers like `copy-files-to-cwd`, `run-kiro-command`, `get-skills`, and MCP persistence.
+- **Runner + Kiro adapters** (`src/electron/libs/runner.ts`, `kiro-cli.ts`, `kiro-conversation.ts`, `kiro-message-adapter.ts`) discover the `kiro-cli` binary, spawn `kiro-cli chat ...`, read Kiro’s SQLite conversation store, and translate raw history rows into the `AgentMessage` schema consumed by the renderer.
+- **React renderer** (`src/ui/**/*`) is a Vite-powered React app with a single Zustand store that renders the session list, prompt bar, file viewers, the MCP/skills modal, and command results. It talks to Electron exclusively through the typed bridge in `src/electron/preload.cts`.
+- **Persistence** lives in two SQLite databases: `SessionStore` (`src/electron/libs/session-store.ts`) keeps Cowork’s metadata/history in `app.getPath("userData")/sessions.db`, while `kiro-cli` maintains the authoritative conversation log inside `~/Library/Application Support/kiro-cli/data.sqlite3` (macOS path; Windows/Linux paths are resolved in `kiro-cli.ts`).
+- **Kiro settings** provide MCP + skill metadata. `mcp-config.ts` reads/writes `~/.kiro/agents/agent_config.json`, while `skill-loader.ts` enumerates directories inside `~/.kiro/skills`.
+- **Residual Claude Agent SDK usage** is limited to `generateSessionTitle()` in `src/electron/libs/util.ts`, which still calls `unstable_v2_prompt()` to suggest a title. The SDK no longer drives the agent runtime.
+
 ## High-Level Overview
 
 ```mermaid
 flowchart LR
-    subgraph ElectronMain["Electron Main Process"]
-        A[main.ts] --> B[SessionStore / sqlite]
-        A --> C[Runner]
-        A --> D[IPC handlers]
-        A --> E[MCP config adapter]
+    subgraph ElectronMain["Electron main process"]
+        ipc["ipc-handlers.ts"]
+        runner["libs/runner.ts"]
+        store["SessionStore (better-sqlite3)"]
+        cfg["mcp-config.ts / skill-loader.ts"]
     end
-    subgraph ReactRenderer["React Renderer"]
-        F[App.tsx / Zustand store]
-        G[SettingsModal / MCP UI]
-        H[PromptInput / StartSessionModal]
-        I[FileSidebar / FileBar]
+    subgraph ReactRenderer["React renderer"]
+        app["App.tsx + Zustand store"]
+        panels["PromptInput / SettingsModal / FileSidebar"]
     end
-    subgraph SDK["@anthropic-ai/claude-agent-sdk"]
-        J[query / unstable_v2_prompt]
+    subgraph KiroRuntime["Kiro CLI runtime"]
+        bin["kiro-cli chat"]
+        data["~/Library/Application Support/kiro-cli/data.sqlite3"]
     end
-    subgraph ClaudeCode["Claude Code CLI"]
-        K[claude command]
+    subgraph KiroAssets["Kiro assets"]
+        claudeCfg["~/.kiro/agents/agent_config.json"]
+        skills["~/.kiro/skills/*"]
     end
-    ElectronMain <--> ReactRenderer
-    C --> J
-    J -->|spawns| K
-    F -->|client events| D
-    D -->|server events| F
+
+    ReactRenderer <-- IPC --> ElectronMain
+    runner --> bin
+    bin --> data
+    cfg <---> ClaudeAssets
+    ElectronMain --> store
+    ReactRenderer -->|slash commands| ElectronMain
 ```
 
-* **Electron main process (`src/electron/main.ts`)** – bootstraps the BrowserWindow, handles dialog/file access, exposes IPC APIs, manages session persistence, and acts as the gateway to Claude Code.
-* **React renderer (`src/ui`)** – Zustand store + components for sessions, prompts, MCP settings, file previews, etc. Communicates exclusively over the typed IPC surface defined in `types.d.ts`.
-* **Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`)** – a Node.js library that provides programmatic control over Claude Code CLI. Exposes `query()` for streaming conversations and `unstable_v2_prompt()` for one-shot prompts.
-* **Claude Code CLI** – the actual agentic runtime. The SDK spawns it as a child process. In dev mode it uses the `claude` command from PATH; in production builds it uses the bundled `cli.js` from the SDK package.
-* **SQLite persistence (`SessionStore`)** – retains session metadata/messages so the desktop app can resume and display history.
+Electron main is the sole process that talks to the OS. It launches `kiro-cli`, polls the conversation database, normalizes events, and streams them to the renderer. React never shells out directly; it emits typed events (`session.start`, `session.continue`, `runKiroCommand`, etc.) that the preload bridge forwards to main.
 
-## Lifecycle
+### End-to-End Component Diagram
+
+```mermaid
+graph TB
+    subgraph UX["React Renderer (Zustand store)"]
+        UI["Session list / chat / panels"]
+    end
+    subgraph Electron["Electron Main Process"]
+        IPC["ipc-handlers.ts"]
+        RunnerLib["runner.ts"]
+        Store["SessionStore (sessions.db)"]
+    end
+    subgraph KiroCLI["Kiro CLI Bundle"]
+        Launch["kiro-cli launcher"]
+        Runtime["kiro-cli-chat worker"]
+        KiroDB["~/Library/Application Support/kiro-cli/data.sqlite3"]
+    end
+    subgraph Config["Local config/assets"]
+        AgentCfg["~/.kiro/agents/agent_config.json"]
+        SkillsDir["~/.kiro/skills/*"]
+    end
+
+    UI -->|client events| IPC
+    IPC --> RunnerLib
+    RunnerLib --> Launch
+    Launch --> Runtime
+    Runtime --> KiroDB
+    RunnerLib -->|poll + sync| KiroDB
+    RunnerLib --> Store
+    Store --> IPC
+    IPC -->|server events| UI
+    IPC --> AgentCfg
+    IPC --> SkillsDir
+```
+
+## Runtime Lifecycle
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant Renderer
-    participant Main
-    participant SessionStore
-    participant SDK as claude-agent-sdk
-    participant CLI as Claude Code CLI
-
-    User->>Renderer: Enter working directory / prompt
-    Renderer->>Main: client-event session.start
-    Main->>SessionStore: createSession + persist
-    Main->>SDK: query({prompt, cwd, mcpServers, ...})
-    SDK->>CLI: spawn child process
-    CLI-->>SDK: stream events / tool calls
-    SDK-->>Main: yield SDKMessage objects
-    Main-->>Renderer: server-event stream.message
-    Main->>SessionStore: record messages / status
-    Renderer-->>User: UI updates (files, tool approvals)
-```
-
-### Key flows
-
-1. **Working directory selection**  
-   The user sets a directory in `StartSessionModal`. It is normalized and stored both in the Zustand state (`cwd`) and in the `SessionStore` row.
-
-2. **Session start**  
-   When the user submits a prompt, `PromptInput` emits `session.start`. Electron creates a new session, updates SQLite, and launches `runClaude`.
-
-3. **Claude Code execution**  
-   `runClaude` (in `libs/runner.ts`) calls the SDK's `query()` function with:
-   * `prompt`: the user's input text
-   * `cwd`: the normalized working directory (fallback to `process.cwd()` if empty)
-   * `env`: enriched PATH (bun, Homebrew, `.local/bin`, nvm/fnm/volta Node versions)
-   * `pathToClaudeCodeExecutable`: in production, points to `cli.js` bundled inside the SDK package; in dev mode it's `undefined` so the SDK uses the `claude` command from PATH
-   * `mcpServers`: loaded from the project entry in `~/.claude.json`
-   * `permissionMode: "bypassPermissions"` + `canUseTool` callback: auto-approves most tools but forwards `AskUserQuestion` events to the renderer for interactive user approval
-
-4. **Streaming + persistence**  
-   Each SDK event is forwarded to the renderer and recorded in SQLite via `SessionStore.recordMessage`. File creation/access events are heuristically extracted for the FileBar/FileSidebar.
-
-5. **MCP configuration**  
-   `SettingsModal` calls the IPC endpoints `get-mcp-servers` / `save-mcp-servers`, which read/write the relevant project block in `~/.claude.json`. A built-in “Run command” panel executes any `claude mcp …` command inside the selected working directory, keeping the desktop app and CLI in sync.
-
-## Detailed Components
-
-### IPC Surface
-
-* `getStaticData`, `statistics` – system metrics for the sidebar.
-* `generate-session-title` – invokes Claude Code to suggest a title.
-* `session.*` events – drive the session lifecycle (start, continue, stop, delete).
-* `read-file`, `open-file-external`, `file-exists` – used by the File sidebar (text/Image/PDF/Excel/PPT support).
-* `get-mcp-servers`, `save-mcp-servers`, `run-npx-install` – MCP settings management.
-
-All IPC payloads are defined in `types.d.ts` and enforced on both sides (TypeScript + preload layer).
-
-### MCP Integration
-
-1. **Storage** – Agent Cowork mirrors Claude Desktop by storing per-project config inside `~/.claude.json`. Keys are normalized absolute paths (e.g., `/Users/girpatil/Documents/Coding/Papers_To_Analyze`). Both stdio (`type: "stdio", command: …, args, env`) and HTTP servers (`type: "http", url, headers`) are preserved verbatim—no assumptions about transport are made.
-2. **UI Management** – The Settings modal reads either the manually set working directory or the active session cwd. Users can:
-   * Add/edit/remove entries via the form (stdio entries show command/args/env; HTTP entries show URL/headers).
-   * Run `claude mcp …` commands via the built-in runner; stdout/stderr are shown inline.
-3. **Runtime Injection** – `runClaude` calls `loadMcpServers(session.cwd)` and passes the returned object to the SDK's `mcpServers` option. Stdio entries become `{ type: "stdio", command, args, env }`. HTTP entries become `{ type: "http", url, headers }`. The SDK forwards these to the CLI, which spawns stdio MCP servers or connects to HTTP endpoints as needed.
-
-#### When do MCP servers start?
-
-```mermaid
-sequenceDiagram
-    participant UI as Renderer
+    participant Renderer as React Renderer
     participant Main as Electron Main
-    participant SDK as claude-agent-sdk
-    participant CLI as Claude Code CLI
-    participant MCP as MCP Server
-
-    UI->>Main: session.start {cwd, prompt}
-    Main->>Main: normalize cwd + create session
-    Main->>Main: loadMcpServers(cwd)
-    Main->>SDK: query({ cwd, mcpServers, ... })
-    SDK->>CLI: spawn claude process
-    CLI->>MCP: spawn stdio server (e.g., npx @playwright/mcp@latest)
-    MCP-->>CLI: stdio connection established
-    CLI-->>SDK: stream events (tool list includes MCP tools)
-    SDK-->>Main: yield SDKMessage objects
-    Main-->>UI: forward via server-event IPC
-```
-
-MCP servers only spin up when a session begins; they aren't launched when Cowork boots or when you merely add/edit entries in Settings.
-
-#### How does Cowork call Claude Code?
-
-Agent Cowork does **not** call Claude Code CLI directly. Instead, it uses the `@anthropic-ai/claude-agent-sdk` package as an intermediary:
-
-```mermaid
-sequenceDiagram
     participant Runner as runner.ts
-    participant SDK as claude-agent-sdk
-    participant CLI as Claude Code CLI
-    participant API as Anthropic API
+    participant Workspace as ~/Documents/workspace-kiro-cowork/task-*
+    participant CLI as kiro-cli
+    participant DB as kiro-cli data.sqlite3
 
-    Runner->>SDK: query({ prompt, cwd, env, mcpServers, ... })
-    SDK->>CLI: spawn child process (claude or cli.js)
-    CLI->>API: Connect to Anthropic API
-    loop Agentic Loop
-        API-->>CLI: Model response / tool calls
-        CLI-->>SDK: Stream events (init, tool, result, ...)
-        SDK-->>Runner: Yield SDKMessage objects
+    User->>Renderer: Enter prompt
+    Renderer->>Main: client-event session.start
+    Main->>Workspace: create task workspace (if new)
+    Main->>Runner: runClaude({ prompt, workspace, resumeId? })
+    Runner->>CLI: spawn "kiro-cli chat --no-interactive ..."
+    loop Poll ~750ms
+        CLI->>DB: append/update conversations_v2 row
+        Runner->>DB: load new history entries (cursor)
+        Runner->>Main: emit stream.user_prompt / stream.message
+        Main->>Renderer: server-event IPC
+        Main->>store: persist status/messages
     end
-    Runner-->>UI: Forward events via IPC
+    CLI-->>Runner: process exit (code)
+    Runner->>DB: final sync
+    Runner->>Main: session.status
+    Main->>Renderer: session.status
 ```
 
-**Why this design?**
-- The SDK provides a clean async iterator interface over the CLI's JSON output
-- It handles process lifecycle, environment setup, and error handling
-- Agent Cowork only needs to consume events and forward them to the UI
+1. **Session creation** – `session.start` triggers `SessionStore.createSession()`. If no `cwd` exists (new task), `workspace.ts` provisions `~/Documents/workspace-kiro-cowork/task-<timestamp>` and stores it in the session so Kiro CLI runs in an isolated folder.
+2. **Running Kiro** – `runClaude()` resolves the `kiro-cli` binary (`KIRO_CLI_PATH`, `/Applications/Kiro CLI.app`, `/Applications/Kiro.app`, then `$PATH`) and spawns `kiro-cli chat --no-interactive --trust-all-tools --wrap never`. If the session already knows a `kiroConversationId`, `--resume` is added so Kiro reuses that conversation.
+3. **Conversation sync** – while the CLI runs, we poll Kiro’s SQLite database for new `conversations_v2` history rows and convert them into `StreamMessage`s (`convertKiroHistoryEntries`). Each event is immediately forwarded to the renderer and stored in `sessions.db`.
+4. **Status updates** – when the CLI exits, we do a final sync and emit `session.status`. Any error also emits `runner.error` so the renderer can surface it.
+5. **Continuation** – `session.continue` reuses the stored workspace and `kiroConversationId`, so Kiro CLI resumes the correct conversation inside that directory.
 
-**Dev vs Production:**
-- **Dev mode** – `pathToClaudeCodeExecutable` is `undefined`, so the SDK spawns whatever `claude` command is on your PATH (requires Claude Code CLI installed globally or via npm).
-- **Packaged app** – `getClaudeCodePath()` returns `app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk/cli.js` inside the app bundle. The SDK package includes its own bundled CLI entry point.
+> **Implication:** streaming fidelity depends on polling. If we disabled the poller, the UI would only update after the CLI exits, but with polling the renderer gets near real-time updates.
 
-Cowork doesn't reimplement any agent logic; it simply orchestrates the SDK with the selected working directory, environment, and MCP servers.
+### Conversation synchronization & history cursors
 
-### File Uploads
+- `SessionStore` now stores `kiro_conversation_id` and `kiro_history_cursor`. We optimistically populate them when `convertKiroHistoryEntries` sees new messages so the next run can resume without rereading the full history.
+- The conversation key we query with is the normalized working directory. `loadKiroConversation()` opens `~/Library/Application Support/kiro-cli/data.sqlite3` (macOS), `%APPDATA%\kiro-cli\data.sqlite3` (Windows), or `~/.kiro-cli/data.sqlite3` (Linux) and fetches `select ... from conversations_v2 where key = ?`.
+- Each history entry contains `user`, `assistant`, and `request_metadata` blobs. `kiro-message-adapter.ts` maps them to Cowork’s `AgentMessage` schema, synthesizing UUIDs when Kiro omitted them.
+- `resolveKiroCliBinary()` (in `kiro-cli.ts`) locates the CLI binary across platforms (environment override, `/Applications` bundle, PATH lookup). This keeps `runner.ts` agnostic to OS details, and we update it whenever the install layout changes.
+- `loadKiroConversation()` (in `kiro-conversation.ts`) opens Kiro’s SQLite database in read-only mode and fetches the `conversations_v2` row for the active working directory. It’s the single source of truth for chat history, which is why both the streaming poller and the final sync call it.
+- `convertKiroHistoryEntries()` (in `kiro-message-adapter.ts`) takes the raw history array from `conversations_v2.value` and emits Cowork’s internal `StreamMessage` objects (user prompts, tool uses, assistant text, etc.). This adapter lets the renderer stay decoupled from Kiro’s JSON schema.
 
-The prompt bar includes a paperclip button that lets you select arbitrary files. When you pick files:
+> **How "streaming" works**  
+> Instead of reading the SQLite log once at the end, Cowork now polls `~/Library/Application Support/kiro-cli/data.sqlite3` about twice per second while the CLI process runs. Each poll slices off any new history entries and forwards them immediately, which gives near-real-time updates even though we still rely on the DB as the source of truth. If the polling ever causes issues we can revert by removing the interval and returning to the previous “sync only on exit” implementation in `runner.ts`.
 
-1. The renderer asks the OS for paths (`select-files` IPC).
-2. The main process copies each file into the current working directory, adding suffixes if a name already exists.
-3. A success/error message is shown under the prompt. Once copied, the files are part of the workspace so Claude’s tools (Bash, Read, etc.) can access them in the same session.
+## Build Footprint
 
-#### Understanding Claude Agent SDK vs Claude Code CLI
+Electron apps always bundle a full Chromium runtime and Node.js, so even small code changes ship inside a ~400–500 MB `.app`/`.dmg`. The bulk of the size comes from:
 
-A common misconception is that "Claude Code is built with Claude Agent SDK." **This is incorrect** — the relationship is the reverse:
+- The Electron runtime itself (~250 MB).
+- All runtime dependencies in `node_modules` (better-sqlite3 native bindings, React, Radix UI, etc.).
+- The `@anthropic-ai/claude-agent-sdk` package, which includes the entire Claude Code CLI.
+- Static assets and compiled React/Vite output.
 
-| Component | Role | Size |
-|-----------|------|------|
-| **Claude Code CLI** | The core agentic runtime — contains all logic for tool execution, file editing, MCP integration, and Anthropic API connection | ~11 MB (`cli.js`) |
-| **Claude Agent SDK** | A Node.js wrapper library that spawns and controls Claude Code CLI programmatically | ~720 KB (`sdk.mjs`) |
+In other words, our own logic only touches a handful of TypeScript files, but the package still contains the full browser+Node runtime. Deploying a new version therefore means copying the whole bundle and (optionally) backing up the previous `.app` before replacing it.
 
-**Key evidence:**
+### Workspace management
 
-1. **The SDK bundles Claude Code**, not the other way around:
-   ```json
-   // node_modules/@anthropic-ai/claude-agent-sdk/package.json
-   "claudeCodeVersion": "2.1.6"
-   ```
+- `workspace.ts` ensures `~/Documents/workspace-kiro-cowork` exists when the app boots.
+- Every new session auto-creates a unique subdirectory (`task-YYYYMMDD-HHMMSS[-NN]`) under that root and uses it as `cwd` for all `kiro-cli` invocations, so conversations never clash even if tasks relate to the same project.
+- The UI no longer lets users select arbitrary folders; instead they upload any required assets and Cowork copies them into the session workspace.
+- Older sessions created before this change continue using their original directories; the automatic workspace allocation only applies to newly created sessions.
 
-2. **The SDK has an option to specify the CLI path** (`pathToClaudeCodeExecutable`), because it spawns Claude Code as a child process.
+### CLI invocation & inputs
 
-3. **The bundled `cli.js` is the full Claude Code CLI** (11 MB) compiled into a single JavaScript file.
+- `runClaude()` spawns `kiro-cli chat --no-interactive --trust-all-tools --wrap never --model <...> --agent <...> [--resume] "<prompt>"`. By default the model is `claude-opus-4.5` and the agent profile is `kiro-coworker`, but you can override them via `KIRO_DEFAULT_MODEL` / `KIRO_AGENT`. `--resume` is included only when we have a stored conversation ID for that directory.
+- Environment variables (`KIRO_DEFAULT_MODEL`, `KIRO_AGENT`, plus the enhanced PATH) control model/agent defaults. Users override them before launching Coworker if needed.
+- Slash commands and uploads operate on the session workspace: slash commands shell out to the same directory, and uploads copy files into that folder so Kiro sees them.
+- Kiro CLI writes its entire conversation history into a single row per workspace (`~/Library/Application Support/kiro-cli/data.sqlite3`, table `conversations_v2`). The `history` array grows with each tool call/result. Coworker keeps a cursor (`kiroHistoryCursor`) and on each poll slices `history[cursor:]`, converts the new entries, and forwards them to the renderer.
+- You can inspect the raw log manually via `sqlite3 ~/Library/Application\ Support/kiro-cli/data.sqlite3` and `SELECT key,value FROM conversations_v2 WHERE key='<workspace path>'`.
+- Polling works the same in both CLI modes; the only impact of the interactive toggle is whether we append `--no-interactive` (automatic exit) or leave the CLI running until you click “Stop”.
+- Why not parse stdout directly? Unlike the Claude SDK, Kiro CLI does not emit a JSON protocol on stdout—the output is meant for humans. Scraping that text would be brittle, so we rely on the structured SQLite log instead. If Kiro exposes a streaming SDK in the future we can drop the poller.
 
-```
-┌─────────────────────────────────────────────────────┐
-│  Claude Agent SDK (wrapper)                         │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  Claude Code CLI (bundled as cli.js)          │  │
-│  │  - Agentic loop                               │  │
-│  │  - Tool execution (Bash, file edit, etc.)     │  │
-│  │  - MCP server management                      │  │
-│  │  - Anthropic API connection                   │  │
-│  └───────────────────────────────────────────────┘  │
-│                                                     │
-│  SDK Layer (sdk.mjs):                               │
-│  - Spawns CLI as child process                      │
-│  - Parses JSON output from CLI                      │
-│  - Exposes query() async generator                  │
-│  - Handles abort/interrupt signals                  │
-└─────────────────────────────────────────────────────┘
-```
+### Session resumption
 
-#### What does `query()` actually do?
+- `session.continue` refuses to run if the store does not have a `kiroConversationId`. New sessions therefore require at least one successful run so Kiro can write the row we later resume from.
+- On continue requests, we call `runClaude()` with the stored `kiroConversationId`. Today the CLI flag is a bare `--resume`, so Kiro determines which conversation to load based on its own metadata for the working directory.
+- Stopping a session (`session.stop`) SIGINTs the child process and marks the session as `idle`; there is no partial flush of the conversation log until Kiro writes again.
 
-The SDK bundles **Claude Code CLI version 2.1.6** as `cli.js` (an **11 MB** file). The `query()` function is the SDK's primary interface for interacting with it.
-
-**Function signature:**
-
-```typescript
-// Signature from sdk.d.ts
-export declare function query(_params: {
-    prompt: string | AsyncIterable<SDKUserMessage>;
-    options?: Options;
-}): Query;
-
-// Query extends AsyncGenerator
-export declare interface Query extends AsyncGenerator<SDKMessage, void> {
-    interrupt(): Promise<void>;
-    setPermissionMode(mode: PermissionMode): Promise<void>;
-    setModel(model?: string): Promise<void>;
-    // ... other control methods
-}
-```
-
-**When you call `query()`, the following happens:**
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│  1. SPAWN CHILD PROCESS                                                │
-│     ─────────────────────                                              │
-│     Either the bundled cli.js (~11 MB) or a custom path you provide    │
-│     via pathToClaudeCodeExecutable option.                             │
-│                                                                        │
-│  2. PASS OPTIONS AS CLI ARGUMENTS/ENV                                  │
-│     ──────────────────────────────────                                 │
-│     Options like cwd, prompt, mcpServers, permissionMode, env,         │
-│     resume (session ID), etc. are passed to the spawned process.       │
-│                                                                        │
-│  3. CLI RUNS THE AGENTIC LOOP                                          │
-│     ──────────────────────────                                         │
-│     Claude Code CLI connects to Anthropic API, executes tools,         │
-│     manages MCP servers, and runs until completion or interruption.    │
-│                                                                        │
-│  4. STREAM JSON EVENTS TO STDOUT                                       │
-│     ─────────────────────────────                                      │
-│     The CLI outputs structured JSON events to stdout. Each event       │
-│     represents a step in the conversation (init, assistant message,    │
-│     tool use, tool result, final result, etc.)                         │
-│                                                                        │
-│  5. SDK PARSES AND YIELDS SDKMessage OBJECTS                           │
-│     ─────────────────────────────────────────                          │
-│     The SDK reads stdout, parses JSON lines, and yields typed          │
-│     SDKMessage objects via the async iterator interface.               │
-│     Your code consumes them with: for await (const message of q)       │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-```mermaid
-sequenceDiagram
-    participant App as Your Code
-    participant SDK as claude-agent-sdk
-    participant CLI as cli.js (Claude Code)
-    participant API as Anthropic API
-
-    App->>SDK: query({ prompt, options })
-    SDK->>CLI: spawn child process
-    Note over SDK,CLI: Pass cwd, env, mcpServers,<br/>permissionMode, resume, etc.
-    CLI->>API: Connect & send prompt
-    loop Agentic Loop
-        API-->>CLI: Model response
-        CLI->>CLI: Execute tools if needed
-        CLI-->>SDK: JSON event to stdout
-        SDK-->>App: yield SDKMessage
-    end
-    CLI-->>SDK: result event (success/error)
-    SDK-->>App: yield final SDKMessage
-```
-
-**How Agent Cowork consumes it:**
-
-```typescript
-// From runner.ts
-const q = query({ prompt, options: { cwd, env, mcpServers, ... } });
-
-for await (const message of q) {
-    // message is an SDKMessage object
-    // Types: system (init/result), assistant (text/tool_use), user (tool_result)
-    sendMessage(message);  // Forward to React UI via IPC
-}
-```
-
-**Message types yielded by `query()`:**
-
-| Type | Subtype | Description |
-|------|---------|-------------|
-| `system` | `init` | Session started, contains `session_id` |
-| `system` | `result` | Session ended (success or error) |
-| `assistant` | — | Model response (text or tool_use blocks) |
-| `user` | — | Tool results fed back to the model |
-
-#### Who runs the tools? (Agentic Loop)
-
-**Claude Code CLI runs the tools, NOT `runner.ts`.** The `runner.ts` file is a passive consumer that only:
-1. Calls the SDK's `query()` function
-2. Forwards streamed `SDKMessage` events to the UI
-
-The entire agentic loop happens **inside Claude Code CLI**:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Claude Code CLI (the agentic loop)                     │
-│                                                         │
-│  1. Send prompt + context to Anthropic API              │
-│  2. Receive model response (text + tool_use blocks)     │
-│  3. Execute tools (Bash, file edit, MCP tools, etc.)    │
-│  4. Collect tool results                                │
-│  5. Send results back to model                          │
-│  6. Repeat until model says "done"                      │
-│                                                         │
-│  ──► Stream events to stdout (JSON) ──►                 │
-└─────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│  runner.ts (passive consumer)                           │
-│                                                         │
-│  for await (const message of query(...)) {              │
-│      sendMessage(message);  // forward to UI            │
-│  }                                                      │
-└─────────────────────────────────────────────────────────┘
-```
-
-#### Session Resumption and Context Persistence
-
-When a user sends successive prompts in the same Agent Cowork session, **the same Claude Code session is resumed**, preserving the full conversation history. This works even after the app is closed and reopened, or days later.
-
-```mermaid
-flowchart TB
-    subgraph AgentCowork["Agent Cowork (Electron)"]
-        SessionStore[(SQLite DB)]
-        Runner[runner.ts]
-    end
-    
-    subgraph ClaudeCode["Claude Code CLI"]
-        CCStore[(Claude Code<br/>Session Storage)]
-        AgentLoop[Agentic Loop]
-    end
-    
-    Runner -->|"query({ resume: claudeSessionId })"| AgentLoop
-    AgentLoop -->|"init message with session_id"| Runner
-    Runner -->|"store claudeSessionId"| SessionStore
-    AgentLoop <-->|"conversation history"| CCStore
-```
-
-**How session resumption works:**
+### Reopening an Existing Session
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant UI as React UI
-    participant Main as Electron Main
-    participant Store as SessionStore (SQLite)
-    participant SDK as claude-agent-sdk
-    participant CLI as Claude Code CLI
-    participant CCStore as Claude Code Storage
+    participant UI as Renderer
+    participant IPC
+    participant Store as SessionStore
+    participant Runner
+    participant CLI as kiro-cli
+    participant DB as kiro data.sqlite3
 
-    Note over User,CCStore: ══ First Prompt ══
-    User->>UI: Enter prompt "Build a REST API"
-    UI->>Main: session.start { prompt }
-    Main->>Store: createSession()
-    Main->>SDK: query({ prompt, resume: undefined })
-    SDK->>CLI: spawn process
-    CLI->>CCStore: Create new session
-    CLI-->>SDK: init { session_id: "abc123" }
-    SDK-->>Main: yield SDKMessage
-    Main->>Store: save claudeSessionId = "abc123"
-    CLI->>CLI: Execute agentic loop (tools, API calls)
-    CLI-->>SDK: stream assistant/tool messages
-    SDK-->>Main: yield messages
-    Main-->>UI: forward events
-
-    Note over User,CCStore: ══ Hours/Days Later ══
-    User->>UI: Enter follow-up "Add authentication"
-    UI->>Main: session.continue { sessionId, prompt }
-    Main->>Store: getSession() → claudeSessionId = "abc123"
-    Main->>SDK: query({ prompt, resume: "abc123" })
-    SDK->>CLI: spawn process with resume flag
-    CLI->>CCStore: Load session "abc123" history
-    CCStore-->>CLI: Full conversation context
-    CLI->>CLI: Continue agentic loop WITH context
-    CLI-->>SDK: stream messages (aware of prior work)
-    SDK-->>Main: yield messages
-    Main-->>UI: forward events
+    User->>UI: Select previous session
+    UI->>IPC: client-event session.history
+    IPC->>Store: getSessionHistory(id)
+    Store-->>IPC: metadata + messages
+    IPC-->>UI: server-event session.history
+    note over UI: Chat view rehydrates immediately
+    User->>UI: Click "Continue"
+    UI->>IPC: client-event session.continue
+    IPC->>Store: update status=running
+    Store-->>Runner: session record (includes kiroConversationId)
+    Runner->>CLI: spawn kiro-cli chat --resume
+    loop Poll history
+        CLI->>DB: append new entries
+        Runner->>DB: slice new history (cursor)
+        Runner->>IPC: stream.message / stream.user_prompt
+        IPC->>Store: persist messages + cursor
+        IPC->>UI: update view
+    end
+    CLI-->>Runner: exit code
+    Runner->>IPC: session.status (completed/error)
+    IPC->>Store: update status + timestamps
 ```
 
-**Key points:**
+This flow allows a reopened session to display historical messages instantly (from `sessions.db`) while new responses stream in as kiro-cli writes them.
 
-| Aspect | How it works |
-|--------|--------------|
-| **Session ID capture** | On first prompt, Claude Code returns `session_id` in init message. Agent Cowork saves this as `claudeSessionId`. |
-| **Persistence** | `claudeSessionId` is stored in SQLite (`claude_session_id` column), surviving app restarts. |
-| **Resumption** | On follow-up prompts, `resumeSessionId` is passed to `query()`, which tells Claude Code to load existing context. |
-| **Context storage** | Claude Code CLI maintains its own session storage with full conversation history. |
-| **Time independence** | Even days later, as long as `claudeSessionId` exists, the full context is retrieved and reused. |
+## Kiro CLI Integration Details
 
-**Code evidence:**
+### Binary discovery & environment enrichment
 
-```typescript
-// First prompt: capture session_id from init message (runner.ts:114-121)
-if (message.type === "system" && message.subtype === "init") {
-  session.claudeSessionId = message.session_id;
-  onSessionUpdate?.({ claudeSessionId: sdkSessionId });
-}
+`resolveKiroCliBinary()` checks `KIRO_CLI_PATH`, `/Applications/Kiro CLI.app`, `/Applications/Kiro.app`, and finally looks up `kiro-cli` (`kiro-cli.exe` on Windows) on the user’s PATH. If nothing is found we emit `runner.error` and fail fast.
 
-// Follow-up prompts: pass resume option (runner.ts:68-70)
-const q = query({
-  prompt,
-  options: {
-    resume: resumeSessionId,  // ← Tells Claude Code to continue this session
-    // ...
-  }
-});
-```
+`enhancedEnv` (in `src/electron/libs/util.ts`) prepends Homebrew, bun, `.local/bin`, nvm/fnm/volta shims, `/usr/local/bin`, `/usr/bin`, etc. to PATH. Every CLI invocation adds `NO_COLOR=1`, `CLICOLOR=0`, and `KIRO_CLI_DISABLE_PAGER=1` to keep the output machine-friendly.
 
-### File Handling
+Cowork passes `--model <ID>` and `--agent <name>` to every `kiro-cli chat` invocation. The defaults are `claude-sonnet-4.5` and `kiro-coworker`, but you can override them by exporting `KIRO_DEFAULT_MODEL` and/or `KIRO_AGENT` before launching the app (e.g., `KIRO_DEFAULT_MODEL=claude-opus-4.5 KIRO_AGENT=my-profile bun run dev`).
 
-* Text-based files are read directly and streamed to the renderer.
-* Binary assets: PDFs render via `file://` embed, images -> base64 data URLs, Excel/PPT are parsed into JSON for table/slide previews.
-* FileBar segmentation (accessed vs created) is based on tool metadata + regex heuristics.
+> **Why do I see both `kiro-cli` and `kiro-cli-chat` in `ps`?**  
+> The `kiro-cli` binary is a lightweight launcher that resolves the agent profile and spawns the actual conversation engine (`kiro-cli-chat`). When Cowork starts a session the OS therefore shows two processes: the launcher (`kiro-cli …`) and the runtime worker (`kiro-cli-chat …`). Both carry the same flags and exit when the session completes.
+>
+> **Why do we pass `--no-interactive`?**  
+> All Cowork runs are non-interactive: the user approves/denies tools via the UI, not via the CLI prompt. `--no-interactive` disables Kiro’s REPL/pager so the child process never waits on stdin; it’s orthogonal to streaming.
+>
+> **Does every prompt relaunch the CLI?**  
+> Yes. Each prompt spawns a new `kiro-cli chat … "<prompt>"` process. We persist the `conversation_id`/cursor in `sessions.db`, so when the next prompt arrives we spawn another process with the same working directory and `--resume`. Kiro looks up “latest conversation for this directory” and continues it automatically.
+>
+> **Which session does `--resume` pick?**  
+> The working directory is the key. Kiro’s SQLite log stores one `conversations_v2` row per normalized path. `--resume` simply loads the most recent conversation for the `cwd` we pass; there’s no explicit session ID in the CLI today.
+>
+> **What if I start multiple tasks in the same directory?**  
+> Kiro will treat them as the same conversation because `cwd` collides. We still keep separate rows in our own `sessions.db`, but Kiro sees only one conversation record per directory, so both runs will resume/append to the same history.
+>
+> **How can I isolate tasks that share a codebase?**  
+> Today the only workaround is to give each task a unique working directory (real folder, symlink, or copy) or manually reset/delete the conversation in Kiro before starting a new task. Kiro CLI doesn’t yet expose a `--conversation-id` flag we could use to force isolation.
 
-### Persistence
+### Command invocation & slash commands
+
+- Prompt submissions spawn `kiro-cli chat` with the prompt appended as the last argument.
+- Slash commands (textareas starting with `/`) never touch the runner. `PromptInput` calls `window.electron.runKiroCommand({ cwd, command })`, which shells out to the same binary with arbitrary arguments so `/status`, `/context`, etc. behave like the official CLI.
+- The Settings modal reuses this facility indirectly through `run-npx-install` (generic shell command within the selected working directory) and provides a separate `/skills` runner (`run-skills-cli`) that still shells out to `claude --print --setting-sources user,project --allowedTools Skill "/skills"` until Kiro ships an equivalent summary.
+
+### Conversation metadata & support directories
+
+`kiro-cli.ts` can also locate:
+
+- the support directory (macOS `~/Library/Application Support/kiro-cli`, Windows `%APPDATA%\kiro-cli`, Linux `~/.kiro-cli`),
+- the persistent conversation DB (`data.sqlite3`),
+- the log directory (`$TMPDIR/kiro-log` or a custom `KIRO_LOG_DIR`),
+- and the socket directory (`$TMPDIR/kirorun`).
+
+We only read the DB today, but the helper centralizes discovery so future features can tail logs or inspect sockets without reimplementing platform-specific paths.
+
+## MCP & Skills Surfaces
+
+- **MCP config** – `loadKiroMcpServers()`/`setKiroMcpServerDisabled()` read and write `~/.kiro/agents/agent_config.json`. The Settings modal lists every entry from that file and lets you flip the `disabled` flag without touching a terminal; structural edits still happen via Kiro CLI or by editing the JSON file directly.
+- **Skill discovery** – `skill-loader.ts` enumerates directories inside `~/.kiro/skills`. There is no SKILL.md parsing—the modal simply lists folder names with quick links to open them in Finder.
+
+## Renderer & IPC Contract
+
+The preload script (`src/electron/preload.cts`) exposes:
+
+- **Session control** – `sendClientEvent`, `onServerEvent`, `generateSessionTitle`, `getRecentCwds`.
+- **Filesystem** – `readFile`, `fileExists`, `select-directory`, `select-files`, `copy-files-to-cwd`, `openFileExternal`, `openExternalUrl`.
+- **Kiro bridges** – `runKiroCommand`.
+- **MCP & skills** – `getKiroMcpServers`, `setKiroMcpServerDisabled`, `getSkills`.
+- **Diagnostics** – `getStaticData`, `subscribeStatistics`.
+
+All payloads are typed in `types.d.ts` and mirrored in `src/ui/types.ts`, so renderer code stays type-safe.
+
+The renderer is responsible for:
+
+- Maintaining the single source of truth via Zustand (`useAppStore.ts`). It aggregates command results, permission requests (placeholder for future implementations), file metadata, and session history.
+- Presenting history fetched via `session.history`, including tool cards, transcripts, file trackers, and command outputs.
+- Computing the “effective CWD” (`useEffectiveCwd.ts`) so slash commands and uploads default to the current session’s directory if the manual field is empty.
+- Handling uploads (`PromptInput` + paperclip) by asking the main process to copy files into the workspace and surfacing the result inline.
+
+## File Handling & Uploads
+
+`read-file` in `main.ts` supports:
+
+- Text formats (`.ts`, `.py`, `.md`, etc.) – return inline content.
+- Images – base64-encode for embedding.
+- PDF – return the path for browser rendering.
+- Excel (`xlsx`, `xlsm`, etc.) – parse via `xlsx` into JSON so the renderer can show sheets.
+- PowerPoint – decompress via `yauzl` and extract slide text.
+- Binary fallbacks – mark as non-previewable and offer “open externally.”
+
+Uploads go through `copy-files-to-cwd`, which deduplicates filenames, copies files with collision-safe suffixes, and returns both successes and failures so the renderer can provide granular feedback.
+
+## Persistence Layout
 
 ```mermaid
 erDiagram
@@ -442,6 +288,8 @@ erDiagram
         text id PK
         text title
         text claude_session_id
+        text kiro_conversation_id
+        integer kiro_history_cursor
         text status
         text cwd
         text allowed_tools
@@ -455,46 +303,32 @@ erDiagram
         text data
         integer created_at
     }
-    sessions ||--o{ messages : "has many"
+    sessions ||--o{ messages : has_many
 ```
 
-SQLite lives in `app.getPath("userData")/sessions.db` (WAL mode). `SessionStore` keeps an in-memory map plus persisting updates so the UI can render history instantly on launch.
+- `SessionStore` lives in `app.getPath("userData")/sessions.db` (WAL mode). It mirrors every `stream.message` / `stream.user_prompt` the runner emits so history survives restarts.
+- Conversation bodies never live in Cowork’s DB; we always rehydrate from the Kiro SQLite store and drop stitched messages into our own history table.
+- Each message row stores the serialized JSON payload. The UI replays them verbatim when the user opens a historic session.
+- The session/talk list you see in the UI is sourced from the `sessions` table via `SessionStore.listSessions()`, ordered by `updated_at DESC`. Each row tracks its own title, status, working directory, and cursor, so different tasks under the same directory never overwrite each other—they simply become separate session rows.
+- Kiro CLI and the Electron app use **two separate SQLite files**:
+  - `~/Library/Application Support/kiro-cli/data.sqlite3` (written exclusively by `kiro-cli`/`kiro-cli-chat`). We poll it to discover new history entries; we never write to it.
+  - `<userData>/sessions.db` (managed by `SessionStore`). We write session metadata and the streamed messages there so the UI can reopen conversations offline.
+- We do **not** parse STDOUT directly. Instead, `runner.ts` polls Kiro’s SQLite history and pushes any new entries to the renderer. This makes the UI behave like a stream even though we rely on the DB as the source of truth.
+- Inputs to Kiro CLI are passed via the spawn arguments/environment (e.g., `kiro-cli chat --model … --agent … "<prompt>"`). Slash commands go through `runKiroCommand` which shells out in the same way; stdin is not used.
 
 ## Security Considerations
 
-**What exists now:**
+- **Process privileges** – `kiro-cli` inherits the user’s permissions. There is no sandbox, so selecting a directory with sensitive files grants the agent full access to it.
+- **Auto approvals** – `--trust-all-tools` means the CLI never asks the renderer for permission. This mirrors running `kiro-cli chat --trust-all-tools` manually but removes the safety net the old Claude SDK provided. Future work could reintroduce granular approvals by parsing tool events ourselves.
+- **Slash commands** – `/whatever` literally shells out to the CLI inside the selected directory. Malformed commands can delete files or hang; we only guard against empty input.
+- **MCP editing** – Toggling servers writes directly into `~/.kiro/agents/agent_config.json`. We validate the payload shape but cannot guarantee the downstream CLI accepts it.
+- **Uploads** – Files are copied into the workspace with no additional scanning or sandboxing.
+- **External links** – Renderer navigation is restricted to `http(s)` and `mailto`, but once a link opens in the browser it behaves normally.
 
-* **Permission prompts** – Tool calls that require user input (`AskUserQuestion`) are forwarded to the renderer, and users must approve/deny.
-* **Directory scoping** – Every Claude Code invocation is scoped to the user-selected working directory; this prevents accidental operations on arbitrary paths unless the user explicitly points Cowork there.
-* **Enhanced PATH** – Controlled list of paths (Homebrew, bun, `.local/bin`, Node via nvm/fnm) to ensure predictable command resolution.
+## Residual Claude SDK Usage
 
-**What’s missing / to be aware of:**
-
-* **No sandbox** – Once a working directory is selected, Claude Code has normal filesystem and network access within the OS permissions of the user account. There is no macOS sandbox or jailed execution environment.
-* **No secrets redaction** – Files are read raw by the main process and could be streamed to Claude; users must rely on the built-in permission prompts and their own judgment when sharing sensitive data.
-* **MCP commands run verbatim** – The “Run command” field executes whatever text is provided (`claude`, `npx`, etc.) in the selected directory. There is no validation beyond requiring a directory.
-* **IPC trust boundary** – The preload script validates origins in dev/prod, but opening a malicious renderer window would still circumvent IPC restrictions.
-* **Network operations** – Rely entirely on Claude Code’s internal controls. Cowork itself does not block HTTP requests or uploads.
-
-## Adding New Features
-
-1. **New MCP server**  
-   * Add via Settings modal or `claude mcp add …` in the proper directory.
-   * The session must run in the same directory for Claude Code to discover it.
-
-2. **Additional IPC tools**  
-   * Extend `types.d.ts` with the payloads.
-   * Add `ipcMainHandle` wrappers in `main.ts`.
-
-3. **Custom file previews**  
-   * Extend the `read-file` handler with new MIME logic.
-   * Update `FileSidebar` to render the new `fileType`.
-
-4. **Security hardening** (future ideas)  
-   * Add optional sandboxing (macOS app sandbox, or running Claude Code inside a restricted shell).
-   * Allow per-session command allowlists/denylists.
-   * Support read-only modes for working directories.
+Although Kiro CLI now drives every session, we still depend on `@anthropic-ai/claude-agent-sdk` for one feature: generating session titles. `generateSessionTitle()` calls `unstable_v2_prompt()` with the user’s first prompt and the enriched environment/path to produce a concise label. If the SDK fails we fall back to `"New Session"`. Removing this dependency would require us to either call an HTTP API directly or ask Kiro CLI for a similar helper.
 
 ---
 
-For day-to-day development, `bun run dev` starts both Vite and Electron with hot reload. Production builds are created via `bun run dist:mac|win|linux`, which transpiles the Electron code, builds the React UI, and packages everything with electron-builder.
+This document reflects the post-port reality: Kiro CLI is the runtime, Cowork orchestrates it, and Kiro’s own settings directory (`~/.kiro`) is the bridge for MCPs and skills (while `~/.claude/settings.json` still feeds legacy environment variables).

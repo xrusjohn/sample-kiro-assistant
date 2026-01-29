@@ -24,32 +24,23 @@ type FileReadResult = {
 
 type McpServersMap = import("./src/shared/mcp").McpServersMap;
 
-type McpServersResponse = {
+type KiroMcpServersResponse = {
     success: boolean;
-    servers?: McpServersMap;
+    servers: McpServersMap;
     error?: string;
     settingsPath: string;
-    cwd?: string;
 }
 
-type SaveMcpServersResult = {
+type ToggleKiroMcpPayload = {
+    name: string;
+    disabled: boolean;
+}
+
+type ToggleKiroMcpResult = {
     success: boolean;
-    servers?: McpServersMap;
     error?: string;
     settingsPath: string;
-    cwd?: string;
-}
-
-type NpxInstallPayload = {
-    cwd: string;
-    command: string;
-}
-
-type NpxInstallResult = {
-    success: boolean;
-    stdout?: string;
-    stderr?: string;
-    error?: string;
+    servers?: McpServersMap;
 }
 
 type FileSelectionResult = string[] | null;
@@ -66,15 +57,24 @@ type CopyFilesResult = {
     error?: string;
 };
 
-type ClaudeCommandPayload = {
+type KiroCommandPayload = {
     cwd: string;
     command: string;
 }
 
-type ClaudeCommandResult = {
+type KiroCommandResult = {
     success: boolean;
     stdout?: string;
     stderr?: string;
+    error?: string;
+}
+
+type SkillInfo = import("./src/shared/skills").SkillInfo;
+
+type SkillsResponse = {
+    success: boolean;
+    user: SkillInfo[];
+    project: SkillInfo[];
     error?: string;
 }
 
@@ -88,12 +88,12 @@ type EventPayloadMapping = {
     "open-file-external": boolean;
     "open-external-url": boolean;
     "file-exists": boolean;
-    "get-mcp-servers": McpServersResponse;
-    "save-mcp-servers": SaveMcpServersResult;
-    "run-npx-install": NpxInstallResult;
+    "get-kiro-mcp-servers": KiroMcpServersResponse;
+    "set-kiro-mcp-disabled": ToggleKiroMcpResult;
     "select-files": FileSelectionResult;
     "copy-files-to-cwd": CopyFilesResult;
-    "run-claude-command": ClaudeCommandResult;
+    "run-kiro-command": KiroCommandResult;
+    "get-skills": SkillsResponse;
 }
 
 interface Window {
@@ -112,10 +112,10 @@ interface Window {
         openFileExternal: (filePath: string) => Promise<boolean>;
         openExternalUrl: (url: string) => Promise<boolean>;
         fileExists: (filePath: string) => Promise<boolean>;
-        getMcpServers: (cwd?: string) => Promise<McpServersResponse>;
-        saveMcpServers: (payload: { cwd: string; servers: McpServersMap }) => Promise<SaveMcpServersResult>;
-        runNpxInstall: (payload: NpxInstallPayload) => Promise<NpxInstallResult>;
-        runClaudeCommand: (payload: ClaudeCommandPayload) => Promise<ClaudeCommandResult>;
+        getKiroMcpServers: () => Promise<KiroMcpServersResponse>;
+        setKiroMcpDisabled: (payload: ToggleKiroMcpPayload) => Promise<ToggleKiroMcpResult>;
+        runKiroCommand: (payload: KiroCommandPayload) => Promise<KiroCommandResult>;
         copyFilesToCwd: (payload: CopyFilesPayload) => Promise<CopyFilesResult>;
+        getSkills: () => Promise<SkillsResponse>;
     }
 }

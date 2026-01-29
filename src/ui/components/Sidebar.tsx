@@ -70,27 +70,27 @@ export function Sidebar({
   };
 
   return (
-    <aside className="fixed inset-y-0 left-0 flex h-full w-[280px] flex-col gap-4 border-r border-ink-900/5 bg-[#FAF9F6] px-4 pb-4 pt-12">
+    <aside className="fixed inset-y-0 left-0 flex h-full w-[280px] flex-col gap-4 border-r border-ink-900/20 bg-surface-secondary px-4 pb-4 pt-12">
       <div 
         className="absolute top-0 left-0 right-0 h-12"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
       <button
-        className="w-full rounded-xl border border-ink-900/10 bg-surface px-4 py-2.5 text-sm font-medium text-ink-700 hover:bg-surface-tertiary hover:border-ink-900/20 transition-colors"
+        className="w-full rounded-xl border border-ink-900/20 bg-accent/20 px-4 py-2.5 text-sm font-medium text-ink-900 hover:bg-accent/30 hover:border-accent transition-colors"
         onClick={onNewSession}
       >
         + New Task
       </button>
       <div className="flex flex-col gap-2 overflow-y-auto flex-1">
         {sessionList.length === 0 && (
-          <div className="rounded-xl border border-ink-900/5 bg-surface px-4 py-5 text-center text-xs text-muted">
+          <div className="rounded-xl border border-ink-900/15 bg-surface-tertiary/60 px-4 py-5 text-center text-xs text-muted">
             No sessions yet. Start by sending a prompt.
           </div>
         )}
         {sessionList.map((session) => (
           <div
             key={session.id}
-            className={`cursor-pointer rounded-xl border px-2 py-3 text-left transition ${activeSessionId === session.id ? "border-accent/30 bg-accent-subtle" : "border-ink-900/5 bg-surface hover:bg-surface-tertiary"}`}
+            className={`cursor-pointer rounded-xl border px-2 py-3 text-left transition ${activeSessionId === session.id ? "border-accent/50 bg-accent-subtle/40" : "border-ink-900/15 bg-surface-tertiary/60 hover:bg-surface-tertiary"}`}
             onClick={() => setActiveSessionId(session.id)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveSessionId(session.id); } }}
             role="button"
@@ -107,7 +107,7 @@ export function Sidebar({
               </div>
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
-                  <button className="flex-shrink-0 rounded-full p-1.5 text-ink-500 hover:bg-ink-900/10" aria-label="Open session menu" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                  <button className="flex-shrink-0 rounded-full p-1.5 text-ink-500 hover:bg-surface-tertiary" aria-label="Open session menu" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
                       <circle cx="5" cy="12" r="1.7" />
                       <circle cx="12" cy="12" r="1.7" />
@@ -116,14 +116,14 @@ export function Sidebar({
                   </button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
-                  <DropdownMenu.Content className="z-50 min-w-[220px] rounded-xl border border-ink-900/10 bg-white p-1 shadow-lg" align="center" sideOffset={8}>
-                    <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-ink-900/5" onSelect={() => onDeleteSession(session.id)}>
+                  <DropdownMenu.Content className="z-50 min-w-[220px] rounded-xl border border-ink-900/10 bg-surface-secondary p-1 shadow-lg" align="center" sideOffset={8}>
+                    <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-surface-tertiary" onSelect={() => onDeleteSession(session.id)}>
                       <svg viewBox="0 0 24 24" className="h-4 w-4 text-error/80" fill="none" stroke="currentColor" strokeWidth="1.8">
                         <path d="M4 7h16" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /><path d="M7 7l1 12a1 1 0 0 0 1 .9h6a1 1 0 0 0 1-.9l1-12" />
                       </svg>
                       Delete this session
                     </DropdownMenu.Item>
-                    <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-ink-900/5" onSelect={() => setResumeSessionId(session.id)}>
+                    <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-surface-tertiary" onSelect={() => setResumeSessionId(session.id)}>
                       <svg viewBox="0 0 24 24" className="h-4 w-4 text-ink-500" fill="none" stroke="currentColor" strokeWidth="1.8">
                         <path d="M4 5h16v14H4z" /><path d="M7 9h10M7 12h6" /><path d="M13 15l3 2-3 2" />
                       </svg>
@@ -137,19 +137,19 @@ export function Sidebar({
         ))}
       </div>
       <button
-        className="rounded-xl border border-ink-900/10 bg-white px-4 py-2.5 text-sm font-medium text-ink-700 hover:border-accent/40 hover:text-accent transition-colors"
+        className="rounded-xl border border-ink-900/20 bg-surface px-4 py-2.5 text-sm font-medium text-ink-100 hover:border-accent/40 hover:text-accent transition-colors"
         onClick={onOpenSettings}
       >
         ⚙️ Settings
       </button>
       <Dialog.Root open={!!resumeSessionId} onOpenChange={(open) => !open && setResumeSessionId(null)}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-ink-900/40 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-xl">
+          <Dialog.Overlay className="fixed inset-0 bg-ink-900/60 backdrop-blur-md" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface-secondary p-6 shadow-xl border border-ink-900/10">
             <div className="flex items-start justify-between gap-4">
               <Dialog.Title className="text-lg font-semibold text-ink-800">Resume</Dialog.Title>
               <Dialog.Close asChild>
-                <button className="rounded-full p-1 text-ink-500 hover:bg-ink-900/10" aria-label="Close dialog">
+                <button className="rounded-full p-1 text-ink-500 hover:bg-surface-tertiary" aria-label="Close dialog">
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M6 6l12 12M18 6l-12 12" />
                   </svg>

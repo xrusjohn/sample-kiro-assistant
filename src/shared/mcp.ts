@@ -6,6 +6,7 @@ export type McpServerConfig = {
   url?: string;
   headers?: Record<string, string>;
   transport?: string | Record<string, unknown>;
+  disabled?: boolean;
   [key: string]: unknown;
 };
 

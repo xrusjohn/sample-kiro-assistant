@@ -3,10 +3,12 @@
         "strict": true,
         "target": "ESNext",
         "module": "NodeNext",
+        "moduleResolution": "nodenext",
         "outDir": "../../dist-electron",
         "skipLibCheck": true,
         // add global types
         "types": [
+            "node",
             "../../types"
         ]
     }

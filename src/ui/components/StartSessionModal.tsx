@@ -1,34 +1,19 @@
-import { useEffect, useState } from "react";
-
 interface StartSessionModalProps {
-  cwd: string;
   prompt: string;
   pendingStart: boolean;
-  onCwdChange: (value: string) => void;
   onPromptChange: (value: string) => void;
   onStart: () => void;
   onClose: () => void;
 }
 
 export function StartSessionModal({
-  cwd,
   prompt,
   pendingStart,
-  onCwdChange,
   onPromptChange,
   onStart,
   onClose
 }: StartSessionModalProps) {
-  const [recentCwds, setRecentCwds] = useState<string[]>([]);
-
-  useEffect(() => {
-    window.electron.getRecentCwds().then(setRecentCwds).catch(console.error);
-  }, []);
-
-  const handleSelectDirectory = async () => {
-    const result = await window.electron.selectDirectory();
-    if (result) onCwdChange(result);
-  };
+  const workspaceHint = "~/Documents/workspace-kiro-cowork";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/20 px-4 py-8 backdrop-blur-sm">
@@ -41,45 +26,10 @@ export function StartSessionModal({
             </svg>
           </button>
         </div>
-        <p className="mt-2 text-sm text-muted">Create a new session to start interacting with agent.</p>
+        <p className="mt-2 text-sm text-muted">
+          Each session runs inside its own isolated workspace under <code>{workspaceHint}</code>. Upload files to bring artifacts into scope.
+        </p>
         <div className="mt-5 grid gap-4">
-          <label className="grid gap-1.5">
-            <span className="text-xs font-medium text-muted">Working Directory</span>
-            <div className="flex gap-2">
-              <input
-                className="flex-1 rounded-xl border border-ink-900/10 bg-surface-secondary px-4 py-2.5 text-sm text-ink-800 placeholder:text-muted-light focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors"
-                placeholder="/path/to/project"
-                value={cwd}
-                onChange={(e) => onCwdChange(e.target.value)}
-                required
-              />
-              <button
-                type="button"
-                onClick={handleSelectDirectory}
-                className="rounded-xl border border-ink-900/10 bg-surface px-3 py-2 text-sm text-ink-700 hover:bg-surface-tertiary transition-colors"
-              >
-                Browse...
-              </button>
-            </div>
-            {recentCwds.length > 0 && (
-              <div className="mt-2 grid gap-2 w-full">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-light">Recent</div>
-                <div className="flex flex-wrap gap-2 w-full min-w-0">
-                  {recentCwds.map((path) => (
-                    <button
-                      key={path}
-                      type="button"
-                      className={`truncate rounded-full border px-3 py-1.5 text-xs transition-colors whitespace-nowrap ${cwd === path ? "border-accent/60 bg-accent/10 text-ink-800" : "border-ink-900/10 bg-white text-muted hover:border-ink-900/20 hover:text-ink-700"}`}
-                      onClick={() => onCwdChange(path)}
-                      title={path}
-                    >
-                      {path}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </label>
           <label className="grid gap-1.5">
             <span className="text-xs font-medium text-muted">Prompt (optional)</span>
             <textarea
@@ -93,7 +43,7 @@ export function StartSessionModal({
           <button
             className="flex flex-col items-center rounded-full bg-accent px-5 py-3 text-sm font-medium text-white shadow-soft hover:bg-accent-hover transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             onClick={onStart}
-            disabled={pendingStart || !cwd.trim()}
+            disabled={pendingStart}
           >
             {pendingStart ? (
               <svg aria-hidden="true" className="w-5 h-5 animate-spin" viewBox="0 0 100 101" fill="none">

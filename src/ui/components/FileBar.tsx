@@ -94,7 +94,7 @@ function FileChip({
   return (
     <div
       key={file.path}
-      className="group relative flex items-center gap-1.5 rounded-lg border border-ink-900/10 bg-white px-2.5 py-1.5 hover:border-accent/30 hover:bg-accent-subtle transition-colors cursor-pointer"
+      className="group relative flex items-center gap-1.5 rounded-lg border border-ink-900/10 bg-surface-secondary px-2.5 py-1.5 hover:border-accent/30 hover:bg-accent-subtle transition-colors cursor-pointer"
       onClick={() => canPreview ? onFileClick(file) : onOpenExternal(file)}
       title={canPreview ? file.path : `${file.path} (click to open in default app)`}
     >
@@ -103,7 +103,7 @@ function FileChip({
         {file.name}
       </span>
       <button
-        className="ml-1 rounded p-0.5 text-ink-400 hover:text-ink-600 hover:bg-ink-900/10 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="ml-1 rounded p-0.5 text-ink-400 hover:text-ink-600 hover:bg-surface-tertiary opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={(e) => {
           e.stopPropagation();
           onOpenExternal(file);
@@ -171,7 +171,7 @@ export function FileBar({
       <div className="fixed bottom-[88px] left-0 right-0 px-4 z-30 lg:ml-[280px]">
         <div className="mx-auto max-w-3xl flex justify-end">
           <button
-            className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-ink-700 border border-ink-900/10 shadow-sm hover:bg-white transition-colors"
+            className="rounded-full bg-surface-secondary/80 px-3 py-1 text-xs font-medium text-ink-700 border border-ink-900/10 shadow-sm hover:bg-surface-secondary transition-colors"
             onClick={onToggleCollapse}
           >
             Show files ({total})

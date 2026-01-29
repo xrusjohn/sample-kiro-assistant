@@ -32,7 +32,7 @@ export type SessionView = {
 interface AppState {
   sessions: Record<string, SessionView>;
   activeSessionId: string | null;
-  prompt: string;
+  prompt: string; // used for StartSessionModal only
   cwd: string;
   pendingStart: boolean;
   globalError: string | null;
@@ -40,6 +40,7 @@ interface AppState {
   showStartModal: boolean;
   historyRequested: Set<string>;
   commandResult: CommandResult | null;
+  cliInteractive: boolean;
 
   // File sidebar state
   fileSidebarOpen: boolean;
@@ -59,6 +60,7 @@ interface AppState {
   markHistoryRequested: (sessionId: string) => void;
   resolvePermissionRequest: (sessionId: string, toolUseId: string) => void;
   setCommandResult: (result: CommandResult | null) => void;
+  setCliInteractive: (value: boolean) => void;
   handleServerEvent: (event: ServerEvent) => void;
 
   // File sidebar actions
@@ -272,6 +274,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   showStartModal: false,
   historyRequested: new Set(),
   commandResult: null,
+  cliInteractive: false,
 
   // File sidebar state
   fileSidebarOpen: false,
@@ -357,6 +360,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setCommandResult: (result) => set({ commandResult: result }),
+  setCliInteractive: (cliInteractive) => set({ cliInteractive }),
 
 
   handleServerEvent: (event) => {

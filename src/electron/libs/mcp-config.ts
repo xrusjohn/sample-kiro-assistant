@@ -1,73 +1,70 @@
-import { readFile, writeFile } from "fs/promises";
-import { join, resolve as resolvePath } from "path";
+import { mkdir, readFile, writeFile } from "fs/promises";
+import { dirname, join } from "path";
 import { homedir } from "os";
 import type { McpServersMap } from "../../shared/mcp.js";
 
-type ProjectConfig = {
+type KiroAgentConfig = {
+  name?: string;
   mcpServers?: McpServersMap;
+  tools?: unknown;
+  allowedTools?: unknown;
+  resources?: unknown;
+  prompt?: string;
+  model?: string;
   [key: string]: unknown;
 };
 
-type ClaudeConfig = {
-  projects?: Record<string, ProjectConfig>;
-  [key: string]: unknown;
-};
+const KIRO_AGENT_CONFIG_PATH = join(homedir(), ".kiro", "agents", "agent_config.json");
 
-const CLAUDE_CONFIG_PATH = join(homedir(), ".claude.json");
-export function getClaudeSettingsPath(): string {
-  return CLAUDE_CONFIG_PATH;
+export function getKiroMcpSettingsPath(): string {
+  return KIRO_AGENT_CONFIG_PATH;
 }
 
-async function readClaudeConfig(): Promise<ClaudeConfig> {
+async function readAgentConfig(): Promise<KiroAgentConfig> {
   try {
-    const raw = await readFile(CLAUDE_CONFIG_PATH, "utf8");
-    return JSON.parse(raw) as ClaudeConfig;
+    const raw = await readFile(KIRO_AGENT_CONFIG_PATH, "utf8");
+    return JSON.parse(raw) as KiroAgentConfig;
   } catch (error: any) {
     if (error?.code === "ENOENT") {
       return {};
     }
-    throw new Error(`Failed to read Claude settings (${CLAUDE_CONFIG_PATH}): ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Failed to read Kiro agent config (${KIRO_AGENT_CONFIG_PATH}): ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
-async function writeClaudeConfig(data: ClaudeConfig): Promise<void> {
+async function writeAgentConfig(data: KiroAgentConfig): Promise<void> {
+  await mkdir(dirname(KIRO_AGENT_CONFIG_PATH), { recursive: true });
   const payload = JSON.stringify(data, null, 2) + "\n";
-  await writeFile(CLAUDE_CONFIG_PATH, payload, "utf8");
+  await writeFile(KIRO_AGENT_CONFIG_PATH, payload, "utf8");
 }
 
-function normalizeProjectPath(preferred?: string): string {
-  const target = preferred && preferred.trim() ? preferred : process.cwd();
-  return resolvePath(target);
-}
-
-function ensureProject(config: ClaudeConfig, preferredPath?: string): ProjectConfig {
-  if (!config.projects || typeof config.projects !== "object") {
-    config.projects = {};
-  }
-  const key = normalizeProjectPath(preferredPath);
-  if (!config.projects[key] || typeof config.projects[key] !== "object") {
-    config.projects[key] = {};
-  }
-  return config.projects[key];
-}
-
-export async function loadMcpServers(projectPath?: string): Promise<McpServersMap> {
-  const config = await readClaudeConfig();
-  const project = ensureProject(config, projectPath);
-  if (!project.mcpServers || typeof project.mcpServers !== "object" || Array.isArray(project.mcpServers)) {
-    return {};
-  }
-  return project.mcpServers as McpServersMap;
-}
-
-export async function saveMcpServers(projectPath: string | undefined, next: McpServersMap): Promise<McpServersMap> {
-  const config = await readClaudeConfig();
-  const project = ensureProject(config, projectPath);
-  const ordered = Object.keys(next).sort().reduce<McpServersMap>((acc, key) => {
-    acc[key] = next[key];
+function normalizeServers(map?: McpServersMap): McpServersMap {
+  if (!map || typeof map !== "object") return {};
+  return Object.entries(map).reduce<McpServersMap>((acc, [key, value]) => {
+    acc[key] = value ? { ...value } : value;
     return acc;
   }, {});
-  project.mcpServers = ordered;
-  await writeClaudeConfig(config);
-  return ordered;
+}
+
+export async function loadKiroMcpServers(): Promise<{ path: string; servers: McpServersMap }> {
+  const file = await readAgentConfig();
+  return { path: KIRO_AGENT_CONFIG_PATH, servers: normalizeServers(file.mcpServers as McpServersMap | undefined) };
+}
+
+export async function setKiroMcpServerDisabled(name: string, disabled: boolean): Promise<McpServersMap> {
+  const file = await readAgentConfig();
+  if (!file.mcpServers || typeof file.mcpServers !== "object") {
+    throw new Error("No MCP servers are configured in ~/.kiro/agents/agent_config.json");
+  }
+  if (!(name in file.mcpServers)) {
+    throw new Error(`Unknown MCP server "${name}"`);
+  }
+  const nextServers = { ...file.mcpServers };
+  const current = nextServers[name] || {};
+  nextServers[name] = { ...current, disabled };
+  file.mcpServers = nextServers;
+  await writeAgentConfig(file);
+  return normalizeServers(nextServers);
 }

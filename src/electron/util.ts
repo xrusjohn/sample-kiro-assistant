@@ -1,7 +1,8 @@
 import { ipcMain, WebContents, WebFrameMain } from "electron";
 import { getUIPath } from "./pathResolver.js";
 import { pathToFileURL } from "url";
-export const DEV_PORT = 5173;
+const DEFAULT_DEV_PORT = 5173;
+export const DEV_PORT = Number(process.env.VITE_PORT ?? process.env.DEV_PORT ?? DEFAULT_DEV_PORT);
 
 // Checks if you are in development mode
 export function isDev(): boolean {

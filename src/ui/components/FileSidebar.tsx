@@ -112,8 +112,8 @@ function ExcelViewer({ content, sheetNames }: { content: string | Record<string,
               onClick={() => setActiveSheet(idx)}
               className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors whitespace-nowrap ${
                 idx === activeSheet
-                  ? "bg-white text-ink-800 border-t border-l border-r border-ink-900/10"
-                  : "text-muted hover:text-ink-700 hover:bg-ink-900/5"
+                  ? "bg-surface-secondary text-ink-800 border-t border-l border-r border-ink-900/10"
+                  : "text-muted hover:text-ink-700 hover:bg-surface-tertiary"
               }`}
             >
               {name}
@@ -127,7 +127,7 @@ function ExcelViewer({ content, sheetNames }: { content: string | Record<string,
         <table className="w-full border-collapse text-xs">
           <tbody>
             {data.map((row, rowIdx) => (
-              <tr key={rowIdx} className={rowIdx === 0 ? "bg-surface font-medium" : rowIdx % 2 === 0 ? "bg-white" : "bg-surface/50"}>
+              <tr key={rowIdx} className={rowIdx === 0 ? "bg-surface font-medium" : rowIdx % 2 === 0 ? "bg-surface-secondary" : "bg-surface/50"}>
                 {/* Row number */}
                 <td className="px-2 py-1.5 border border-ink-900/10 text-muted text-center w-10 bg-surface">
                   {rowIdx + 1}
@@ -171,7 +171,7 @@ function PptViewer({ content }: { content: string | PptSlide[] }) {
   return (
     <div className="flex flex-col gap-4 p-4">
       {slides.map((slide) => (
-        <div key={slide.slideNumber} className="rounded-2xl border border-ink-900/10 bg-white p-4 shadow-sm">
+        <div key={slide.slideNumber} className="rounded-2xl border border-ink-900/10 bg-surface-secondary p-4 shadow-sm">
           <div className="flex items-center justify-between text-sm font-semibold text-ink-800">
             <span>Slide {slide.slideNumber}</span>
           </div>
@@ -243,7 +243,7 @@ export function FileSidebar({
   return (
     <div
       ref={sidebarRef}
-      className="fixed inset-y-0 right-0 flex flex-col bg-white border-l border-ink-900/10 shadow-xl z-40"
+      className="fixed inset-y-0 right-0 flex flex-col bg-surface border-l border-ink-900/10 shadow-xl z-40"
       style={{ width: `${width}px` }}
     >
       {/* Resize handle */}

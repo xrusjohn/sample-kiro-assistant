@@ -1,539 +1,318 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import type { McpServerConfig, McpServersMap } from "../types";
-import { useEffectiveCwd } from "../hooks/useEffectiveCwd";
+import type { McpServersMap, SkillInfo } from "../types";
+import { useAppStore } from "../store/useAppStore";
 
 type SettingsModalProps = {
   open: boolean;
   onClose: () => void;
 };
 
-type EnvEntry = {
-  key: string;
-  value: string;
-};
-
-type NewServerForm = {
-  name: string;
-  command: string;
-  argsText: string;
-  envEntries: EnvEntry[];
-};
-
-function createEmptyEnvEntries(): EnvEntry[] {
-  return [{ key: "", value: "" }];
-}
-
-function createEmptyForm(): NewServerForm {
-  return {
-    name: "",
-    command: "",
-    argsText: "",
-    envEntries: createEmptyEnvEntries(),
-  };
-}
-
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [servers, setServers] = useState<McpServersMap>({});
-  const [newServer, setNewServer] = useState<NewServerForm>(() => createEmptyForm());
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [updatingServer, setUpdatingServer] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [settingsPath, setSettingsPath] = useState<string | null>(null);
-  const [installCommand, setInstallCommand] = useState<string>("claude mcp add ");
-  const [installing, setInstalling] = useState(false);
-  const [installOutput, setInstallOutput] = useState<string | null>(null);
+  const [loadingServers, setLoadingServers] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [skills, setSkills] = useState<SkillInfo[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillsError, setSkillsError] = useState<string | null>(null);
+  const [updatingServer, setUpdatingServer] = useState<string | null>(null);
+  const cliInteractive = useAppStore((state) => state.cliInteractive);
+  const setCliInteractive = useAppStore((state) => state.setCliInteractive);
 
-  const orderedServers = useMemo(() => {
-    return Object.entries(servers).sort(([a], [b]) => a.localeCompare(b));
-  }, [servers]);
+  const serverEntries = useMemo(
+    () => Object.entries(servers).sort(([a], [b]) => a.localeCompare(b)),
+    [servers]
+  );
 
-  const cwd = useEffectiveCwd();
-  const displayCwd = cwd || "not set";
-
-  const resetForm = useCallback(() => {
-    setNewServer(createEmptyForm());
-    setFormError(null);
-    setSuccessMessage(null);
-  }, []);
+  const sortedSkills = useMemo(
+    () => [...skills].sort((a, b) => a.name.localeCompare(b.name)),
+    [skills]
+  );
 
   const fetchServers = useCallback(async () => {
-    const targetCwd = cwd.trim();
-    if (!targetCwd) {
-      setServers({});
-      setError("Set a working directory to manage MCP servers.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
+    setLoadingServers(true);
+    setServerError(null);
     try {
-      const response = await window.electron.getMcpServers(targetCwd);
-      setSettingsPath(response.settingsPath ?? null);
+      const response = await window.electron.getKiroMcpServers();
       if (!response.success) {
-        throw new Error(response.error || "Failed to load MCP tools");
+        throw new Error(response.error || "Failed to load MCP servers");
       }
       setServers(response.servers ?? {});
-    } catch (err) {
-      console.error("Failed to load MCP servers:", err);
+      setSettingsPath(response.settingsPath ?? null);
+    } catch (error) {
       setServers({});
-      setError(err instanceof Error ? err.message : "Unable to load MCP tools");
+      setServerError(error instanceof Error ? error.message : "Unable to load MCP servers");
     } finally {
-      setLoading(false);
+      setLoadingServers(false);
     }
-  }, [cwd]);
+  }, []);
+
+  const fetchSkills = useCallback(async () => {
+    setSkillsLoading(true);
+    setSkillsError(null);
+    try {
+      const response = await window.electron.getSkills();
+      if (!response.success) {
+        throw new Error(response.error || "Failed to load skills");
+      }
+      setSkills(response.user ?? []);
+    } catch (error) {
+      setSkills([]);
+      setSkillsError(error instanceof Error ? error.message : "Unable to load skills");
+    } finally {
+      setSkillsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (open) {
-      fetchServers();
-    } else {
-      resetForm();
-      setError(null);
-    }
-  }, [open, fetchServers, resetForm, cwd]);
-
-  const handleEnvChange = (index: number, field: keyof EnvEntry, value: string) => {
-    setNewServer((prev) => {
-      const updated = prev.envEntries.map((entry, idx) => (idx === index ? { ...entry, [field]: value } : entry));
-      return { ...prev, envEntries: updated };
-    });
-  };
-
-  const addEnvRow = () => {
-    setNewServer((prev) => ({ ...prev, envEntries: [...prev.envEntries, { key: "", value: "" }] }));
-  };
-
-  const removeEnvRow = (index: number) => {
-    setNewServer((prev) => {
-      const filtered = prev.envEntries.filter((_, idx) => idx !== index);
-      return { ...prev, envEntries: filtered.length ? filtered : createEmptyEnvEntries() };
-    });
-  };
-
-  const handleAddServer = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setFormError(null);
-    setSuccessMessage(null);
-
-    const trimmedName = newServer.name.trim();
-    const trimmedCommand = newServer.command.trim();
-
-    if (!trimmedName) {
-      setFormError("Server name is required");
+    if (!open) {
+      setServerError(null);
+      setSkillsError(null);
       return;
     }
+    fetchServers();
+    fetchSkills();
+  }, [open, fetchServers, fetchSkills]);
 
-    if (!/^[a-zA-Z0-9._-]+$/.test(trimmedName)) {
-      setFormError("Server name may only contain letters, numbers, dashes, underscores, and periods");
-      return;
-    }
-
-    if (servers[trimmedName]) {
-      setFormError(`An MCP server named "${trimmedName}" already exists`);
-      return;
-    }
-
-    if (!trimmedCommand) {
-      setFormError("Command is required");
-      return;
-    }
-
-    const args = newServer.argsText
-      .split("\n")
-      .map((arg) => arg.trim())
-      .filter(Boolean);
-
-    const env: Record<string, string> = {};
-    for (const entry of newServer.envEntries) {
-      const key = entry.key.trim();
-      if (key) {
-        env[key] = entry.value;
+  const handleToggleServer = useCallback(
+    async (name: string) => {
+      const current = servers[name];
+      if (!current) return;
+      const isEnabled = current.disabled !== true;
+      setUpdatingServer(name);
+      setServerError(null);
+      try {
+        const result = await window.electron.setKiroMcpDisabled({ name, disabled: isEnabled });
+        if (!result.success || !result.servers) {
+          throw new Error(result.error || "Failed to update MCP server");
+        }
+        setServers(result.servers);
+      } catch (error) {
+        setServerError(error instanceof Error ? error.message : "Unable to update MCP server");
+      } finally {
+        setUpdatingServer(null);
       }
-    }
+    },
+    [servers]
+  );
 
-    const nextConfig: McpServerConfig = {
-      command: trimmedCommand,
-    };
-    if (args.length) nextConfig.args = args;
-    if (Object.keys(env).length) nextConfig.env = env;
-
-    const nextServers: McpServersMap = { ...servers, [trimmedName]: nextConfig };
-
-    const trimmedCwd = cwd.trim();
-    if (!trimmedCwd) {
-      setFormError("Set a working directory before saving MCP servers.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const response = await window.electron.saveMcpServers({ cwd: trimmedCwd, servers: nextServers });
-      if (!response.success || !response.servers) {
-        throw new Error(response.error || "Unable to save MCP server");
-      }
-      setServers(response.servers);
-      setSuccessMessage(`Added "${trimmedName}"`);
-      resetForm();
-    } catch (err) {
-      console.error("Failed to add MCP server:", err);
-      setFormError(err instanceof Error ? err.message : "Unable to save MCP server");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRemoveServer = async (name: string) => {
-    if (!window.confirm(`Remove MCP server "${name}"?`)) return;
-    const trimmedCwd = cwd.trim();
-    if (!trimmedCwd) {
-      setFormError("Set a working directory before modifying MCP servers.");
-      return;
-    }
-
-    const nextServers = { ...servers };
-    delete nextServers[name];
-
-    setSaving(true);
-    setFormError(null);
-    setSuccessMessage(null);
-    try {
-      const response = await window.electron.saveMcpServers({ cwd: trimmedCwd, servers: nextServers });
-      if (!response.success || !response.servers) {
-        throw new Error(response.error || "Unable to remove MCP server");
-      }
-      setServers(response.servers);
-    } catch (err) {
-      console.error("Failed to remove MCP server:", err);
-      setFormError(err instanceof Error ? err.message : "Unable to remove MCP server");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleToggleServer = async (name: string, enabled: boolean) => {
-    const existing = servers[name];
-    if (!existing) return;
-    const trimmedCwd = cwd.trim();
-    if (!trimmedCwd) {
-      setFormError("Set a working directory before modifying MCP servers.");
-      return;
-    }
-    const nextServers: McpServersMap = {
-      ...servers,
-      [name]: { ...existing, disabled: !enabled }
-    };
-
-    setUpdatingServer(name);
-    setFormError(null);
-    setSuccessMessage(null);
-    try {
-      const response = await window.electron.saveMcpServers({ cwd: trimmedCwd, servers: nextServers });
-      if (!response.success || !response.servers) {
-        throw new Error(response.error || "Unable to update MCP server");
-      }
-      setServers(response.servers);
-    } catch (err) {
-      console.error("Failed to toggle MCP server:", err);
-      setFormError(err instanceof Error ? err.message : "Unable to update MCP server");
-    } finally {
-      setUpdatingServer(null);
-    }
-  };
-
-  const renderToggle = (name: string, config: McpServerConfig) => {
-    const isEnabled = config.disabled !== true;
-    return (
-      <button
-        type="button"
-        role="switch"
-        aria-checked={isEnabled}
-        onClick={() => handleToggleServer(name, !isEnabled)}
-        disabled={updatingServer === name}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-          isEnabled ? "bg-success" : "bg-ink-200"
-        } ${updatingServer === name ? "opacity-60 cursor-not-allowed" : ""}`}
-      >
-        <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-            isEnabled ? "translate-x-5" : "translate-x-1"
-          }`}
-        />
-        <span className="sr-only">Toggle {name}</span>
-      </button>
-    );
-  };
-
-  const handleRunInstall = async () => {
-    const trimmedCommand = installCommand.trim();
-    const trimmedCwd = cwd.trim();
-    setFormError(null);
-    setSuccessMessage(null);
-    setInstallOutput(null);
-
-    if (!trimmedCommand) {
-      setFormError("Enter a command to run.");
-      return;
-    }
-    if (!trimmedCwd) {
-      setFormError("Set a working directory before running the command.");
-      return;
-    }
-
-    setInstalling(true);
-    try {
-      const result = await window.electron.runNpxInstall({
-        cwd: trimmedCwd,
-        command: trimmedCommand
-      });
-      if (!result.success) {
-        throw new Error(result.error || "Failed to run command");
-      }
-      setSuccessMessage("Command completed successfully.");
-      const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-      setInstallOutput(output || "Command finished with no output.");
-      fetchServers();
-    } catch (err) {
-      console.error("Failed to run command:", err);
-      setFormError(err instanceof Error ? err.message : "Unable to run command");
-    } finally {
-      setInstalling(false);
-    }
-  };
+  const handleOpenSkill = useCallback((path: string) => {
+    if (!path) return;
+    window.electron.openFileExternal(path);
+  }, []);
 
   return (
-    <Dialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+    <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-ink-900/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-6 shadow-2xl">
+        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 flex max-h-[90vh] w-[min(1050px,90vw)] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-3xl bg-surface p-6 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <Dialog.Title className="text-xl font-semibold text-ink-900">Settings</Dialog.Title>
-              <p className="text-sm text-muted">Manage Claude Code MCP tools</p>
-            </div>
-            <Dialog.Close asChild>
-              <button className="rounded-full p-1.5 text-ink-500 hover:bg-ink-900/10" aria-label="Close settings" onClick={onClose}>
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 6l12 12M18 6l-12 12" />
-                </svg>
-              </button>
-            </Dialog.Close>
-          </div>
-
-          {settingsPath && (
-            <div className="mt-3 rounded-xl border border-ink-900/10 bg-surface px-3 py-2 text-xs text-muted">
-              Editing: <span className="font-mono text-ink-700">{settingsPath}</span>
-            </div>
-          )}
-
-          {error && (
-            <div className="mt-4 rounded-xl border border-error/20 bg-error/5 px-3 py-2 text-sm text-error">
-              {error}
-            </div>
-          )}
-
-          <div className="mt-4 rounded-2xl border border-ink-900/10 bg-white p-4">
-            <h3 className="text-sm font-semibold text-ink-800">Install MCP via claude CLI</h3>
-            <p className="mt-1 text-xs text-muted">
-              Run the full command (e.g. <code>claude mcp add playwright npx @playwright/mcp@latest</code>) in your selected working directory ({displayCwd}).
-            </p>
-            <div className="mt-3 flex flex-col gap-2">
-              <input
-                type="text"
-                className="rounded-lg border border-ink-900/20 px-3 py-2 text-sm focus:border-accent focus:outline-none"
-                value={installCommand}
-                onChange={(e) => setInstallCommand(e.target.value)}
-                placeholder="claude mcp add my-server npx @package/mcp@latest"
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
-                  onClick={handleRunInstall}
-                  disabled={installing}
-                >
-                  {installing ? "Running…" : "Run command in Working Directory"}
-                </button>
-                {!cwd && (
-                  <span className="text-xs text-error">Set a working directory (or select a session) before running the command.</span>
-                )}
-              </div>
-              {installOutput && (
-                <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-surface px-2 py-2 text-xs text-ink-700">
-                  {installOutput}
-                </pre>
+              <Dialog.Title className="text-lg font-semibold text-ink-900">Settings</Dialog.Title>
+              <Dialog.Description className="text-sm text-muted">
+                Review Kiro MCP servers and installed skills.
+              </Dialog.Description>
+              {settingsPath && (
+                <p className="mt-2 text-xs text-muted">
+                  MCP settings file: <code className="break-all">{settingsPath}</code>
+                </p>
               )}
             </div>
-          </div>
-
-          <div className="mt-6 grid gap-6 md:grid-cols-2">
-            <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-ink-800">Configured MCP Servers</h3>
             <button
-              className="text-xs font-medium text-ink-500 hover:text-ink-800"
-              onClick={fetchServers}
-              disabled={loading}
+              className="rounded-full border border-ink-200 px-3 py-1 text-sm text-muted hover:text-ink-900"
+              onClick={onClose}
             >
-              Refresh
+              Close
             </button>
           </div>
-              <div className="rounded-2xl border border-ink-900/10 bg-surface p-3 max-h-[360px] overflow-y-auto">
-                {loading ? (
-                  <div className="flex items-center justify-center py-10 text-sm text-muted">Loading…</div>
-                ) : orderedServers.length === 0 ? (
-                  <div className="py-10 text-center text-sm text-muted">No MCP servers configured yet.</div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {orderedServers.map(([name, config]) => {
-                      const isHttp = (config.type ?? "stdio") === "http";
-                      const secondary = isHttp ? (config.url || "HTTP server") : (config.command || "Unknown command");
-                      return (
-                        <div key={name} className="rounded-xl border border-ink-900/10 bg-white p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <div className="text-sm font-semibold text-ink-900">{name}</div>
-                                <span className={`text-xs font-semibold ${config.disabled ? "text-error" : "text-success"}`}>
-                                  {config.disabled ? "Disabled" : "Enabled"}
-                                </span>
-                                <span className="rounded-full bg-surface-tertiary px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
-                                  {isHttp ? "HTTP" : "STDIO"}
-                                </span>
-                              </div>
-                              <div className="text-xs text-muted break-all">
-                                {secondary}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {renderToggle(name, config)}
-                              <button
-                                className="rounded-lg px-2 py-1 text-xs text-error hover:bg-error/10"
-                                onClick={() => handleRemoveServer(name)}
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          </div>
-                        {config.args && config.args.length > 0 && (
-                          <div className="mt-2 text-xs text-muted">
-                            Args:{" "}
-                            <span className="font-mono text-ink-800">
-                              {config.args.join(" ")}
-                            </span>
-                          </div>
-                        )}
-                        {config.env && Object.keys(config.env).length > 0 && (
-                          <div className="mt-2 text-xs text-muted">
-                            Env:
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {Object.entries(config.env).map(([envKey, value]) => (
-                                <span key={envKey} className="rounded-full bg-surface-tertiary px-2 py-0.5 font-mono text-[11px] text-ink-700">
-                                  {envKey}={<span className="text-ink-900">{value}</span>}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+
+          {serverError && (
+            <div className="rounded-xl border border-error/20 bg-error/5 px-3 py-2 text-sm text-error">{serverError}</div>
+          )}
+
+          <section className="rounded-2xl border border-ink-900/10 bg-surface-secondary/70 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-ink-900">CLI Mode</h3>
+                <p className="text-xs text-muted">
+                  {cliInteractive ? "Interactive (Kiro CLI stays open until you stop it)" : "Non-interactive (CLI exits after each response)"}
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setCliInteractive(!cliInteractive)}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${cliInteractive ? "bg-accent" : "bg-ink-200"}`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-surface transition-transform ${cliInteractive ? "translate-x-5" : "translate-x-1"}`}
+                />
+                <span className="sr-only">Toggle interactive CLI mode</span>
+              </button>
+            </div>
+          </section>
+
+          <div className="grid gap-6 md:grid-cols-2">
+          <section className="rounded-2xl border border-ink-900/10 bg-surface-secondary/70 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-ink-900">Kiro MCP Servers</h3>
+                <p className="text-xs text-muted">Read from ~/.kiro/agents/agent_config.json</p>
+              </div>
+              <button
+                className="text-xs font-medium text-ink-500 hover:text-ink-900 disabled:opacity-50"
+                onClick={fetchServers}
+                disabled={loadingServers}
+              >
+                Refresh
+              </button>
             </div>
 
-            <div className="rounded-2xl border border-ink-900/10 bg-white p-4">
-              <h3 className="text-sm font-semibold text-ink-800">Add MCP Server</h3>
-              <form className="mt-4 flex flex-col gap-4" onSubmit={handleAddServer}>
-                <label className="text-xs font-medium text-muted">
-                  Server name
-                  <input
-                    type="text"
-                    className="mt-1 w-full rounded-lg border border-ink-900/20 px-3 py-2 text-sm focus:border-accent focus:outline-none"
-                    value={newServer.name}
-                    onChange={(e) => setNewServer((prev) => ({ ...prev, name: e.target.value }))}
-                    placeholder="filesystem"
-                  />
-                </label>
-                <label className="text-xs font-medium text-muted">
-                  Command
-                  <input
-                    type="text"
-                    className="mt-1 w-full rounded-lg border border-ink-900/20 px-3 py-2 text-sm focus:border-accent focus:outline-none"
-                    value={newServer.command}
-                    onChange={(e) => setNewServer((prev) => ({ ...prev, command: e.target.value }))}
-                    placeholder="npx"
-                  />
-                </label>
-                <label className="text-xs font-medium text-muted">
-                  Arguments <span className="text-[11px] text-muted">(one per line)</span>
-                  <textarea
-                    className="mt-1 h-20 w-full rounded-lg border border-ink-900/20 px-3 py-2 text-sm focus:border-accent focus:outline-none"
-                    value={newServer.argsText}
-                    onChange={(e) => setNewServer((prev) => ({ ...prev, argsText: e.target.value }))}
-                    placeholder={`@modelcontextprotocol/server-browser\n--no-sandbox`}
-                  />
-                </label>
-                <div>
-                  <div className="text-xs font-medium text-muted">Environment variables</div>
-                  <div className="mt-2 flex flex-col gap-2">
-                    {newServer.envEntries.map((entry, index) => (
-                      <div key={index} className="flex gap-2">
-                        <input
-                          type="text"
-                          className="flex-1 rounded-lg border border-ink-900/20 px-2 py-1.5 text-xs focus:border-accent focus:outline-none"
-                          placeholder="KEY"
-                          value={entry.key}
-                          onChange={(e) => handleEnvChange(index, "key", e.target.value)}
-                        />
-                        <input
-                          type="text"
-                          className="flex-1 rounded-lg border border-ink-900/20 px-2 py-1.5 text-xs focus:border-accent focus:outline-none"
-                          placeholder="value"
-                          value={entry.value}
-                          onChange={(e) => handleEnvChange(index, "value", e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="rounded-lg px-2 text-xs text-muted hover:text-error"
-                          onClick={() => removeEnvRow(index)}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                    <button type="button" className="text-xs font-medium text-accent" onClick={addEnvRow}>
-                      + Add variable
-                    </button>
-                  </div>
+            <div className="mt-4 max-h-[360px] overflow-y-auto space-y-3">
+              {loadingServers ? (
+                <div className="flex items-center justify-center py-10 text-sm text-muted">Loading…</div>
+              ) : serverEntries.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-ink-900/20 px-4 py-6 text-center text-sm text-muted">
+                  No MCP servers configured yet.
                 </div>
-
-                {formError && (
-                  <div className="rounded-lg border border-error/20 bg-error/5 px-3 py-2 text-xs text-error">{formError}</div>
-                )}
-                {successMessage && (
-                  <div className="rounded-lg border border-success/20 bg-success/5 px-3 py-2 text-xs text-success">{successMessage}</div>
-                )}
-
-                <div className="flex items-center justify-end gap-2">
-                  <button type="button" className="text-xs font-medium text-muted hover:text-ink-800" onClick={resetForm}>
-                    Clear
-                  </button>
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
-                    disabled={saving}
-                  >
-                    {saving ? "Saving…" : "Save MCP Server"}
-                  </button>
-                </div>
-              </form>
+              ) : (
+                serverEntries.map(([name, config]) => (
+                  <ServerCard
+                    key={name}
+                    name={name}
+                    config={config}
+                    onToggle={handleToggleServer}
+                    updating={updatingServer === name}
+                  />
+                ))
+              )}
             </div>
-          </div>
+          </section>
+
+          <section className="rounded-2xl border border-ink-900/10 bg-surface-secondary/70 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-ink-900">Kiro Skills</h3>
+                <p className="text-xs text-muted">Directories under ~/.kiro/skills</p>
+              </div>
+              <button
+                className="text-xs font-medium text-ink-500 hover:text-ink-900 disabled:opacity-50"
+                onClick={fetchSkills}
+                disabled={skillsLoading}
+              >
+                Refresh
+              </button>
+            </div>
+            {skillsError && (
+              <div className="mt-3 rounded-lg border border-error/20 bg-error/5 px-3 py-2 text-xs text-error">{skillsError}</div>
+            )}
+            <div className="mt-4 max-h-[360px] overflow-y-auto space-y-3">
+              {skillsLoading ? (
+                <div className="flex items-center justify-center py-10 text-sm text-muted">Loading…</div>
+              ) : sortedSkills.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-ink-900/20 px-4 py-6 text-center text-sm text-muted">
+                  No skills detected.
+                </div>
+              ) : (
+                sortedSkills.map((skill) => (
+                  <SkillCard key={skill.path} skill={skill} onOpen={handleOpenSkill} />
+                ))
+              )}
+            </div>
+          </section>
+        </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function ServerCard({
+  name,
+  config,
+  onToggle,
+  updating
+}: {
+  name: string;
+  config: McpServersMap[string];
+  onToggle: (name: string) => void;
+  updating: boolean;
+}) {
+  const isEnabled = config?.disabled !== true;
+  const isHttp = (config?.type ?? "stdio") === "http";
+  const summary = isHttp ? config?.url ?? "HTTP server" : config?.command ?? "Command not specified";
+  const args = Array.isArray(config?.args) ? config?.args : undefined;
+  const env = config?.env && typeof config.env === "object" ? config.env : undefined;
+
+  return (
+    <div className="rounded-2xl border border-ink-900/15 bg-surface p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-ink-900">{name}</span>
+            <span className={`text-[11px] font-semibold ${isEnabled ? "text-success" : "text-error"}`}>
+              {isEnabled ? "Enabled" : "Disabled"}
+            </span>
+            <span className="rounded-full bg-surface-tertiary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+              {isHttp ? "HTTP" : "STDIO"}
+            </span>
+          </div>
+          <p className="text-xs text-muted break-all">{summary}</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isEnabled}
+          disabled={updating}
+          onClick={() => onToggle(name)}
+          className={`relative inline-flex h-6 w-12 shrink-0 items-center rounded-full transition-colors ${
+            isEnabled ? "bg-success" : "bg-ink-200"
+          } ${updating ? "opacity-50" : ""}`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-surface transition-transform ${
+              isEnabled ? "translate-x-6" : "translate-x-1"
+            }`}
+          />
+          <span className="sr-only">Toggle {name}</span>
+        </button>
+      </div>
+      {args && args.length > 0 && (
+        <div className="mt-2 text-[12px] text-muted">
+          Args: <span className="font-mono text-ink-900">{args.join(" ")}</span>
+        </div>
+      )}
+      {env && Object.keys(env).length > 0 && (
+        <div className="mt-2 text-[12px] text-muted">
+          Env:
+          <div className="mt-1 flex flex-wrap gap-1">
+            {Object.entries(env).map(([key, value]) => (
+              <span key={key} className="rounded-full bg-surface-tertiary px-2 py-0.5 font-mono text-[11px] text-ink-800">
+                {key}={<span className="text-ink-900">{value}</span>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SkillCard({ skill, onOpen }: { skill: SkillInfo; onOpen: (path: string) => void }) {
+  return (
+    <div className="rounded-2xl border border-ink-900/15 bg-surface p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-ink-900">{skill.name}</div>
+          <p className="text-xs text-muted break-all">{skill.path}</p>
+        </div>
+        <button
+          className="rounded-full border border-ink-200 px-3 py-1 text-xs text-ink-700 hover:border-accent hover:text-accent"
+          onClick={() => onOpen(skill.path)}
+        >
+          Open
+        </button>
+      </div>
+    </div>
   );
 }
