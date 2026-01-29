@@ -1,14 +1,22 @@
 # Kiro Coworker (Based on Agent Coworker)
 
-Kiro Coworker is our customized build of the open-source Agent Coworker desktop shell. It keeps the familiar Electron + React UX while swapping the runtime for **Kiro CLI**, so you can use every model Kiro supports with session management, MCP tooling, and inline viewers.
+Kiro Coworker is our customized build of the open-source Agent Coworker desktop application. It also takes advantage of Kiro-CLI features like SubAgent, MCPs, Skills etc.
 
+
+We improve the UX and capabilities (500 plus MCP tools & vast array of skills). It can make audio, professional quality video, presentations, excel models, ppts
+and many more things. It can help you with emails, social media, cancelling unwanted subscriptions, filing expenses etc.
+
+It keeps the familiar Electron + React UX while swapping the runtime for **Kiro CLI**, so you can use every model Kiro supports.
+
+The original Agent Coworker build on top of Claude Code SDK and launches it with Claude Agents SDK. We do not have a Kiro SDK yet.
+So we develop a custom interface to the Kiro CLI through SQLLiteDatabase where Kiro-CLI stores convesation information.
+
+To summarize:
 - 🚀 **Native Electron desktop app** with hot-reloadable React/Tailwind renderer
-- 🧠 **Powered entirely by `kiro-cli`** (no Claude CLI required)
-- 🧩 **Full MCP coverage (stdio + HTTP)** surfaced inside Settings
+- 🧠 **Powered entirely by `kiro-cli`** (no Claude CLI required) with Kiro look and feel
+- 🧩 **500 MCPs through Composion. Additional MCPs for Excel, Pencil Desktop etc** surfaced inside Settings
 - 📂 **Auto-provisioned workspaces** per session under `~/Documents/workspace-kiro-cowork/<task-id>`
 - 💾 **SQLite-backed history** so conversations stream in real time and persist across launches
-
-> Kiro Coworker is a fork of Agent Coworker. We kept the UX but rewired the runtime, configuration, and docs for the Kiro ecosystem.
 
 ---
 
