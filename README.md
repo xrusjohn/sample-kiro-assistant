@@ -175,12 +175,13 @@ Replace_with_your_key field.
 
 ---
 
-#Adding skills
+##Adding skills
 
 Adding skills is easy. You can add them using npx command and selecting Kiro option. They will show up in Settings.png dialogue.
 
-`> npx skills add remotion-dev/skills`
+**npx skills add remotion-dev/skills`**
 
+---
 
 ## Working With Files
 
