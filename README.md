@@ -155,17 +155,6 @@ Kiro Cowork instantiates a custom agent named `kiro-coworker`. Its configuration
 
 - **Uploads:** The paperclip copies files into the current workspace (with collision-safe renaming).
 - **FileBar:** Separates created vs accessed files; clicking opens them inline (text/images/PDF/Excel) or via the OS.
-- **Slash commands:** `/context`, `/compact`, `/mcp`, etc., run inside the same CLI process.
-
----
-
-## Security & Permissions
-
-- Tool calls appear as cards so you can approve/deny sensitive actions.
-- Workspaces sandbox Kiro to per-task directories.
-- External links open via the OS (`shell.openExternal`), keeping the renderer sandboxed.
-
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for additional considerations (no kernel sandbox, relies on Kiro’s permissions, etc.).
 
 ---
 
@@ -189,7 +178,7 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for additional considerations
 
 ### Video Creation Example
 
-<video width="640" controls src="images/video.mp4"></video>
+<iframe width="1062" height="597" src="https://www.youtube.com/embed/s46r3NS1V38" title="kiro announcement" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 ### Excel Modelling Example
 
