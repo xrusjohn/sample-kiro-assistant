@@ -18,6 +18,14 @@ To summarize:
 - 📂 **Auto-provisioned workspaces** per session under `~/Documents/workspace-kiro-cowork/<task-id>`
 - 💾 **SQLite-backed history** so conversations stream in real time and persist across launches
 
+![Kiro Cowork Concept](images/KiroCoworkConcept.png)
+
+---
+
+## Deceivingly simple interface
+
+![Kiro Cowork UX](images/KiroCowork.png)
+
 ---
 
 ## Model & Provider Compatibility
@@ -28,8 +36,21 @@ If a model works in `kiro-cli`, it works in Kiro Cowork: Claude (Anthropic API o
 
 ## Architecture Overview
 
-![Kiro Cowork Architecture](images/architecture.png)
+The architecture is simple. It trusts models to be resourceful and figure out a way. We use powerful models and give them necessary tools. In a way it is inspired
+by the "bitter lesson".
+
+![Kiro Cowork Principle](images/KiroCoworkPrinciple.png)
+
+Agent Cowork uses Cloud Code CLI which has a nice SDK called Claude Agents SDK. We don't have it with Kiro CLI. But we figured out a way by using SQLLiteDB maintained by Kiro CLI cleverly as shown in the diagram.
+
 ![Agent Cowork vs Kiro Cowork](images/AgentCoworkvsKiroCoworker.png)
+
+This is a technical diagram of various components involved.
+
+![Kiro Cowork Architecture](images/architecture.png)
+
+This flow shows how SQLLite database is polled.
+
 ![SQLite Polling Flow](images/SQLLite.png)
 
 | Layer | Responsibilities | Key Files |
