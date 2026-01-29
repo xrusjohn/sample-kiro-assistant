@@ -1,14 +1,14 @@
 # Kiro Cowork 
 
-Kiro Cowork is our customized build of the open-source Agent Cowork desktop application. It also takes advantage of Kiro-CLI features like SubAgent, MCPs, Skills etc.
+kiro Cowork is a general purpose agent with capabilities similar to that of Manus AI and Anthropic Cowork.
 
+Kiro Cowork is our customized build of the open-source Agent Cowork desktop application. We replace Claude Code CLI with our own Kiro-CLI. 
+It also takes advantage of Kiro-CLI features like SubAgent, MCPs, Skills etc.
 
 We improve the UX and capabilities (500 plus MCP tools & vast array of skills). It can make audio, professional quality video, presentations, excel models, ppts
 and many more things. It can help you with emails, social media, cancelling unwanted subscriptions, filing expenses etc.
 
-It keeps the familiar Electron + React UX while swapping the runtime for **Kiro CLI**, so you can use every model Kiro supports.
-
-The original Agent Cowork build on top of Claude Code SDK and launches it with Claude Agents SDK. We do not have a Kiro SDK yet.
+As mentioned, the original Agent Cowork build on top of Claude Code SDK and launches it with Claude Agents SDK. We do not have a Kiro SDK yet.
 So we develop a custom interface to the Kiro CLI through SQLLiteDatabase where Kiro-CLI stores convesation information.
 
 To summarize:
@@ -199,11 +199,19 @@ Kiro Cowork instantiates a custom agent named `kiro-coworker`. Its configuration
 
 ### Video Creation Example
 
+It has many skills for PPTs, Excel, Videos etc. Here is a simple promotional video it made using Remotion-Best-Practices skill.
+
 [![Kiro announcement](https://img.youtube.com/vi/s46r3NS1V38/0.jpg)](https://www.youtube.com/watch?v=s46r3NS1V38)
 
 ### Excel Modelling Example
 
+Antrhopic announced Claude for Excel. We tried capability of Kiro Cowork to do research and build excel models, it exceeded our expectations.
+Below are screenshot of the excel model it built to show impact of AI bool on MAG7 stocks and Saas stocks.
+
+It got this data from reputable sources.
 ![Excel Modelling Step 1](images/excel1.png)
+
+It didn't just build great tables, it also built great meaningful visualizations.
 ![Excel Modelling Step 2](images/excel2.png)
 
 ---
