@@ -183,11 +183,11 @@ Adding skills is easy. You can add them using npx command and selecting Kiro opt
 
 ---
 
+
 ## Working With Files
 
 - **Uploads:** The paperclip copies files into the current workspace (with collision-safe renaming).
 - **FileBar:** Separates created vs accessed files; clicking opens them inline (text/images/PDF/Excel) or via the OS.
-
 ---
 
 ## Troubleshooting Tips
@@ -196,7 +196,6 @@ Adding skills is easy. You can add them using npx command and selecting Kiro opt
 - **MCP server not showing:** Edit `~/.kiro/agents/agent_config.json` and refresh Settings.
 - **Slash commands do nothing:** Start a session first; slash commands require an active workspace.
 - **Long-running `execute_bash`:** Some commands (e.g., interactive `npx`) block until they finish. Add non-interactive flags or run manually if needed.
-
 ---
 
 ## Sample Applications
