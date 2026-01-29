@@ -1,54 +1,38 @@
-# Agent Cowork (Open Claude Cowork)
+# Kiro Coworker (Based on Agent Coworker)
 
-Agent Cowork is a desktop shell around **Kiro CLI** that turns Anthropic-compatible coding agents into a rich UX with session management, command history, and inline file viewing. It is built for engineers who want the raw power of Kiro’s terminal workflow with the ergonomics of a native macOS app.
+Kiro Coworker is our customized build of the open-source Agent Coworker desktop shell. It keeps the familiar Electron + React UX while swapping the runtime for **Kiro CLI**, so you can use every model Kiro supports with session management, MCP tooling, and inline viewers.
 
-- 🚀 **Native Electron desktop app** with React/Tailwind UI
-- 🧠 **Powered by `kiro-cli`** for conversations while still honoring existing `~/.kiro` assets (MCP config, skills, env settings)
-- 🧩 **Full MCP support (stdio + HTTP)** via the Settings dialog—no manual JSON edits required
-- 📂 **Workspace aware**: every session runs against the working directory you select, with file viewers, upload support, and activity tracking
+- 🚀 **Native Electron desktop app** with hot-reloadable React/Tailwind renderer
+- 🧠 **Powered entirely by `kiro-cli`** (no Claude CLI required)
+- 🧩 **Full MCP coverage (stdio + HTTP)** surfaced inside Settings
+- 📂 **Auto-provisioned workspaces** per session under `~/Documents/workspace-kiro-cowork/<task-id>`
+- 💾 **SQLite-backed history** so conversations stream in real time and persist across launches
 
-> The project still ships under the “Open Claude Cowork” name in the UI, but we refer to it as Agent Cowork inside the repo.
+> Kiro Coworker is a fork of Agent Coworker. We kept the UX but rewired the runtime, configuration, and docs for the Kiro ecosystem.
 
 ---
 
 ## Model & Provider Compatibility
 
-Agent Cowork inherits the compatibility surface of **Kiro CLI** (which itself speaks the Anthropic-compatible protocol):
-
-- **Claude on Amazon Bedrock** – configure Kiro for Bedrock’s Anthropic Runtime endpoint and authenticate with AWS credentials; Cowork will automatically tap into the same settings.
-- **Anthropic public API** – use your Anthropic API key directly.
-- **Any provider that implements the Anthropic-compatible surface**, including:
-  - Kimi K2
-  - MiniMax M2
-  - DeepSeek 3.2
-  - GLM 4.7
-
-If the provider works in Kiro CLI (same payloads/endpoints), it works in Agent Cowork. Configure the endpoint and credentials once in `~/.claude/settings.json`; both Kiro and Cowork will respect it.
+If a model works in `kiro-cli`, it works in Kiro Coworker: Claude (Anthropic API or Bedrock), Kimi K2, MiniMax M2, DeepSeek, GLM, etc. Configure providers once inside Kiro CLI and the desktop app automatically uses those settings.
 
 ---
 
 ## Architecture Overview
 
+![Kiro Coworker Architecture](images/architecture.png)
+![Agent Coworker vs Kiro Coworker](images/agentcoworkvskirocoworker.png)
+![SQLite Polling Flow](images/SQLLite.png)
+
 | Layer | Responsibilities | Key Files |
 | ----- | ---------------- | --------- |
-| **Electron Main** | Boots the BrowserWindow, exposes IPC APIs (`read-file`, `run-kiro-command`, MCP helpers), spawns `kiro-cli chat`, and copies uploads into the workspace. | `src/electron/main.ts`, `src/electron/libs/runner.ts`, `src/electron/libs/mcp-config.ts` |
+| **Electron Main** | Boots the BrowserWindow, exposes IPC APIs (`read-file`, `run-kiro-command`, MCP helpers), spawns `kiro-cli chat`, and copies uploads into per-session workspaces. | `src/electron/main.ts`, `src/electron/libs/runner.ts`, `src/electron/libs/mcp-config.ts`, `src/electron/libs/workspace.ts` |
 | **React Renderer** | Zustand store + UI components (sessions, prompt bar, MCP settings, file sidebar, file upload, slash commands). | `src/ui/*` |
-| **Kiro CLI runtime** | The actual agent runtime that talks to Anthropic-compatible APIs, executes tools, runs MCP servers, and writes conversation history to its SQLite store. | `/Applications/Kiro CLI.app` or `kiro-cli` on PATH |
+| **Kiro CLI runtime** | Talks to Anthropic-compatible APIs, executes tools, runs MCP servers, and writes conversation history to its SQLite store. | `/Applications/Kiro CLI.app` or `kiro-cli` on PATH |
 | **Claude Agent SDK (helper)** | Only used for `generateSessionTitle()` to keep the automatic title suggestion feature. | `src/electron/libs/util.ts` |
-| **Persistence** | Cowork metadata/history via better-sqlite3; conversation bodies live in Kiro’s own DB. | `src/electron/libs/session-store.ts`, `~/Library/Application Support/kiro-cli/data.sqlite3` |
+| **Persistence** | Coworker metadata/history via `sessions.db`; conversation bodies live in Kiro’s own `~/Library/Application Support/kiro-cli/data.sqlite3`. | `src/electron/libs/session-store.ts` |
 
-More detail (including mermaid diagrams and security notes) lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
----
-
-## Key Capabilities
-
-- **Session management** – start/resume/delete sessions per working directory with automatic title suggestions.
-- **Conversation playback** – view Kiro’s reasoning, tool invocations, and status badges inline.
-- **File insights** – FileSidebar previews text/code, renders PDFs, images, spreadsheets, and tracks accessed/created files independently.
-- **Uploads** – drop extra files into the selected workspace via the paperclip icon; Cowork copies them into the directory so Kiro can read/edit them.
-- **MCP integration** – stdio and HTTP servers can be configured entirely from the Settings modal (see below).
-- **Slash & Kiro commands** – `/context`, `/compact`, `/mcp`, etc. run through the same CLI session for parity with the terminal experience.
+More details (mermaid diagrams, SQLite polling strategy, security notes) live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/INTEGRATION.md`](docs/INTEGRATION.md).
 
 ---
 
@@ -56,85 +40,161 @@ More detail (including mermaid diagrams and security notes) lives in [`docs/ARCH
 
 ### Prerequisites
 
-1. **Kiro CLI** installed and authenticated for your provider (Anthropic, Bedrock, Kimi, etc.). Cowork shells out to `kiro-cli chat ...` for every prompt.
-2. **Claude CLI (optional but recommended)** if you want the Settings modal helpers that still execute `claude mcp ...` or `/skills`.
+1. **Kiro CLI** installed and authenticated for your provider (Anthropic, Bedrock, Kimi, etc.).
+2. **Claude CLI (optional)** only if you want the legacy helpers (e.g., `/skills`) inside Settings.
 3. **Bun (preferred) or Node.js 18+** for building.
-4. macOS 13+ (Windows/Linux build targets exist but the shipping app currently focuses on macOS).
+4. **macOS 13+** (the current build targets macOS; Windows/Linux scripts are stubbed but untested).
 
-> Each session gets its own isolated workspace under `~/Documents/workspace-kiro-cowork/<task-id>`. The app manages those folders automatically; use the Upload button to bring files into the task’s workspace instead of manually pointing Coworker at arbitrary directories.
+> Each new session auto-creates a workspace under `~/Documents/workspace-kiro-cowork/<task-id>`. Use the Upload button to place files into that sandbox; the UI no longer asks you to pick folders manually.
 
 ### Steps
 
 ```bash
-# Clone
-git clone https://github.com/DevAgentForge/Claude-Cowork.git
-cd Claude-Cowork
+# Clone from AWS GitLab
+git clone https://gitlab.aws.dev/wwps-asean-sa-genai/Kiro-Cowork.git
+cd Kiro-Cowork
 
 # Install dependencies
 bun install
 
-# Development mode
-bun run dev            # launches Vite + Electron with hot reload
+# Development mode (Vite + Electron with hot reload)
+bun run dev
 
 # Production build (macOS arm64)
 bun run dist:mac
 ```
 
-The macOS bundle is emitted to `dist/mac-arm64/Agent Cowork.app`. Copy it into `/Applications` (back up any previous version first).
+The macOS bundle is emitted to `dist/mac-arm64/Kiro Coworker.app`. Copy it into `/Applications` (back up any previous version first).
 
-> Cowork launches `kiro-cli chat --model claude-sonnet-4.5 --agent kiro-coworker` by default. Override with `KIRO_DEFAULT_MODEL` or `KIRO_AGENT` before starting the app if you need different defaults.
+> We spawn `kiro-cli chat --no-interactive --trust-all-tools --wrap never --model claude-opus-4.5 --agent kiro-coworker`. Override defaults with `KIRO_DEFAULT_MODEL` / `KIRO_AGENT` before launching the app.
 
 ---
 
-## MCP Integration & Settings Workflow
+## Custom Agent Configuration & MCPs
 
-Agent Cowork now mirrors the configuration that Kiro CLI stores in `~/.kiro/agents/agent_config.json`. The Settings modal is a read-only dashboard with enable/disable toggles—any structural changes still happen via Kiro CLI or by editing the JSON file yourself.
+Kiro Coworker instantiates a custom agent named `kiro-coworker`. Its configuration lives in `~/.kiro/agents/agent_config.json`:
 
-1. **Open Settings.** The “Kiro MCP Servers” panel lists every entry from `~/.kiro/agents/agent_config.json`.
-2. **Toggle availability.** Each server exposes a switch that flips the `disabled` flag inside the JSON file, letting you quickly enable or disable HTTP or stdio MCPs without touching the CLI.
-3. **Edit via CLI when needed.** When you need to add/remove servers or change their commands, continue using `kiro-cli`/`claude mcp …` and then hit Refresh in the modal to pick up the changes.
+```json
+{
+  "name": "kiro-coworker",
+  "description": "A custom agent for my workflow",
+  "mcpServers": {
+    "pencil": {
+      "command": "/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64",
+      "args": ["--ws-port", "53881"],
+      "env": {},
+      "type": "stdio",
+      "disabled": false
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"],
+      "env": {},
+      "disabled": false
+    },
+    "composio": {
+      "type": "http",
+      "url": "https://backend.composio.dev/tool_router/trs_8YCbLt0jkO8_/mcp",
+      "headers": {
+        "x-api-key": "ak_Ra86dArRGY_2yiYPsia7"
+      },
+      "disabled": false
+    },
+    "zai-mcp-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@z_ai/mcp-server"],
+      "env": {
+        "Z_AI_API_KEY": "686a80f3d1e34141b9d1f6239b0b137e.iYhXKIWFWPXwjcpd",
+        "Z_AI_MODE": "ZAI"
+      },
+      "disabled": false
+    },
+    "excel": {
+      "command": "npx",
+      "args": ["--yes", "@negokaz/excel-mcp-server"],
+      "env": {
+        "EXCEL_MCP_PAGING_CELLS_LIMIT": "4000"
+      },
+      "disabled": false
+    }
+  },
+  "tools": [
+    "@pencil","@composio","@playwright","@zai-mcp-server","@excel",
+    "read","glob","grep","write","shell","aws","web_search","web_fetch",
+    "introspect","report","knowledge","thinking","todo","use_subagent"
+  ],
+  "allowedTools": [
+    "@pencil","@composio","@playwright","@zai-mcp-server","@excel",
+    "read","glob","grep","write","shell","aws","web_search","web_fetch",
+    "introspect","report","knowledge","thinking","todo","use_subagent"
+  ],
+  "resources": ["skill:///Users/you/.kiro/skills/**/SKILL.md"],
+  "prompt": "You are a general purpose agent...",
+  "model": "claude-opus-4.5"
+}
+```
 
-The same modal also lists the directories found in `~/.kiro/skills/` so you can jump straight to each skill folder from Cowork. No SKILL.md parsing is required—each directory is treated as a skill.
+- Edit this file to add/remove MCPs. The Settings dialog simply toggles the `disabled` flag and shows summaries.
+- Skills are directories under `~/.kiro/skills`. Each folder is a skill and appears in the UI:
+
+![Settings showing MCPs and Skills](images/settings.png)
 
 ---
 
 ## Working With Files
 
-- **Accessed vs Created Lists** – the FileBar tracks accessed files separately from created files, preventing duplicates between the sections.
-- **Inline Preview** – clicking supported extensions opens the file in the sidebar; unsupported ones open via the OS (using `shell.openExternal`).
-- **Uploads** – use the paperclip icon beside the prompt. Selected files are copied into the CWD (with collision-safe renaming). Kiro can then use Bash or other tools to inspect them.
+- **Uploads:** The paperclip copies files into the current workspace (with collision-safe renaming).
+- **FileBar:** Separates created vs accessed files; clicking opens them inline (text/images/PDF/Excel) or via the OS.
+- **Slash commands:** `/context`, `/compact`, `/mcp`, etc., run inside the same CLI process.
 
 ---
 
 ## Security & Permissions
 
-- Tool calls that would affect your system (Bash, file edits, MCP actions) appear as cards where you can approve or deny.
-- The working directory boundary is respected: Kiro CLI runs inside the directory you select, mirroring the CLI experience.
-- External links clicked inside chat always open in your default browser via `shell.openExternal`, keeping the app sandboxed.
+- Tool calls appear as cards so you can approve/deny sensitive actions.
+- Workspaces sandbox Kiro to per-task directories.
+- External links open via the OS (`shell.openExternal`), keeping the renderer sandboxed.
 
-Refer to the “Security considerations” section in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a deeper discussion, including current limitations (no kernel-level sandboxing, relies on Kiro CLI permissions, etc.).
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for additional considerations (no kernel sandbox, relies on Kiro’s permissions, etc.).
 
 ---
 
 ## Troubleshooting Tips
 
-- **Kiro CLI missing** – make sure `kiro-cli` is installed (set `KIRO_CLI_PATH`, keep `/Applications/Kiro CLI.app`, or add it to your PATH). Cowork cannot start sessions without it.
-- **Claude CLI missing** – only impacts the MCP/skills helpers. Install `claude` if you want to run `claude mcp ...` or `/skills` from the Settings modal.
-- **MCP servers not visible** – open `~/.kiro/agents/agent_config.json` and confirm the entry exists and isn’t marked `disabled: true`, then press Refresh in Settings.
-- **HTTP MCP shows “Unknown command”** – update to the current build; the Settings UI now persists `type: "http"` servers exactly as written.
-- **Slash commands do nothing** – ensure you start a session first; slash commands are routed to the active Kiro CLI session.
+- **Kiro CLI missing:** Ensure `kiro-cli` is installed or set `KIRO_CLI_PATH`.
+- **MCP server not showing:** Edit `~/.kiro/agents/agent_config.json` and refresh Settings.
+- **Slash commands do nothing:** Start a session first; slash commands require an active workspace.
+- **Long-running `execute_bash`:** Some commands (e.g., interactive `npx`) block until they finish. Add non-interactive flags or run manually if needed.
+
+---
+
+## Sample Applications
+
+1. Audio creation
+2. Video creation
+3. Excel modelling
+4. Helping cancel unwanted subscriptions
+5. Social media management
+6. Daily tasks (emails, scheduling)
+
+### Video Creation Example
+
+<video width="640" controls src="images/video.mp4"></video>
+
+### Excel Modelling Example
+
+![Excel Modelling Step 1](images/Excel1.png)
+![Excel Modelling Step 2](images/Excel2.png)
 
 ---
 
 ## Contributing
 
-1. Fork the repository and branch from `main`.
+1. Fork or clone `https://gitlab.aws.dev/wwps-asean-sa-genai/Kiro-Cowork`.
 2. Run `bun run dev` for iterative changes.
-3. Add/adjust docs (`docs/ARCHITECTURE.md`, this `README`) when touching architecture or user-facing behavior.
-4. Open a PR (GitHub) or MR (GitLab mirror) with a clear summary of the changes and testing steps.
+3. Update docs (`docs/ARCHITECTURE.md`, `docs/INTEGRATION.md`, this `README`) when touching architecture or UX.
+4. Open a merge request with a clear summary and testing notes.
 
-If you build something neat—new MCP templates, better HTTP tooling, alternative providers—please share!
-
----
-
-Made with ❤️ to bring Kiro CLI’s power to every desktop. Whether you’re on Anthropic’s Bedrock runtime, Kimi’s endpoints, MiniMax’s coding plan, DeepSeek 3.2, GLM 4.7, or the classic Anthropic API, Agent Cowork gives you the same workflows with a friendlier face. Happy hacking!
+Made with ❤️ to bring Kiro CLI’s power to every desktop. Whether you’re on Anthropic’s Bedrock runtime, Kimi’s endpoints, MiniMax’s coding plan, DeepSeek 3.2, GLM 4.7, or the classic Anthropic API, Kiro Coworker keeps the CLI workflow but adds a friendlier face. Happy hacking!
