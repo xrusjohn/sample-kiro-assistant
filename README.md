@@ -49,7 +49,7 @@ This is a technical diagram of various components involved.
 
 ![Kiro Cowork Architecture](images/architecture.png)
 
-This flow shows how SQLLite database is polled.
+This is a view of the SQLLite database. Every row represents a session.
 
 ![SQLite Polling Flow](images/SQLLite.png)
 
@@ -209,9 +209,11 @@ Antrhopic announced Claude for Excel. We tried capability of Kiro Cowork to do r
 Below are screenshot of the excel model it built to show impact of AI bool on MAG7 stocks and Saas stocks.
 
 It got this data from reputable sources.
+
 ![Excel Modelling Step 1](images/excel1.png)
 
 It didn't just build great tables, it also built great meaningful visualizations.
+
 ![Excel Modelling Step 2](images/excel2.png)
 
 ---
