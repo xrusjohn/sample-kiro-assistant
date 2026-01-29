@@ -1,4 +1,4 @@
-# Kiro Cowork (Based on Agent Cowork)
+# Kiro Cowork 
 
 Kiro Cowork is our customized build of the open-source Agent Cowork desktop application. It also takes advantage of Kiro-CLI features like SubAgent, MCPs, Skills etc.
 
