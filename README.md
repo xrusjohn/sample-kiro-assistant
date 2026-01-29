@@ -1,6 +1,7 @@
 # Kiro Cowork 
 
-kiro Cowork is a general purpose agent with capabilities similar to that of Manus AI and Anthropic Cowork.
+kiro Cowork is a general purpose agent with capabilities similar to that of Manus AI and Anthropic Cowork.The idea behind Kiro Cowork is that it will help every member 
+of the society and not just software developers.
 
 Kiro Cowork is our customized build of the open-source Agent Cowork desktop application. We replace Claude Code CLI with our own Kiro-CLI. 
 It also takes advantage of Kiro-CLI features like SubAgent, MCPs, Skills etc.
