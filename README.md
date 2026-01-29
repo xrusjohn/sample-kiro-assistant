@@ -170,19 +170,12 @@ Replace_with_your_key field.
 
 - Edit this file to add/remove MCPs. The Settings dialog simply toggles the `disabled` flag and shows summaries.
 - Skills are directories under `~/.kiro/skills`. Each folder is a skill and appears in the UI:
+- Adding skills is easy. You can add them by copying folders to the above mentioned parth, or you can add them using npx command and selecting Kiro option. They will show up in Settings dialogue.
+**npx skills add remotion-dev/skills`**
 
 ![Settings showing MCPs and Skills](images/settings.png)
 
 ---
-
-##Adding skills
-
-Adding skills is easy. You can add them using npx command and selecting Kiro option. They will show up in Settings.png dialogue.
-
-**npx skills add remotion-dev/skills`**
-
----
-
 
 ## Working With Files
 
