@@ -65,10 +65,10 @@ Launch of Claude Cowrker closely followed by Motbot (earlier called Clawdbot) ha
 We want Amazonians and Amazon customers to equally participate in this movement while building secure and scalable general purpose agents.
 
 Hence, we document this project extensively in the /docs folder: 
-[architecture.md](/docs/ARCHITECTURE.md)
-[integration.md](/docs/INTEGRATION.md)
-[gitlab.md](/docs/GITLAB.md)
-[working_directory](/docs/WORKING_DIRECTORY.md)
+[ARCHITECTURE.md](/docs/ARCHITECTURE.md),
+[INTEGRATION.md](/docs/INTEGRATION.md),
+[GITLAB.md](/docs/GITLAB.md),
+[WORKING_DIRECTORY](/docs/WORKING_DIRECTORY.md).
 
 
 
