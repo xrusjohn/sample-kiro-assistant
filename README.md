@@ -21,7 +21,7 @@ To summarize:
 
 ---
 
-# Kiro Cowork is for every one in the family
+# Kiro Cowork is for everyone in the family
 
 We show that Kiro is not only for software developers, but every member of the society, for every member in your family (accessabilty features coming soon..)
 
