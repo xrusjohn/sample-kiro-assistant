@@ -324,5 +324,6 @@ Local MCPs like excel, playwright don’t need credentials. We also use ZAI MCPs
 
 This project is to be used only with non-sensitive, non official data.  Typical advisory applicable for any GenAI service applies to this one.
 
-**Remember this is not a production ready project for your sensitive data! **
+**Remember this is not a production ready project for your sensitive data!**
+
 **Remember this is not a reference architecture, but a prototype.**
