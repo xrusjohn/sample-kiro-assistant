@@ -1,4 +1,4 @@
-# Kiro Cowork 
+# Kiro Cowork - infinitely resourceful general purpose agent
 
 kiro Cowork is a general purpose agent with capabilities similar to that of Manus AI and Anthropic Cowork.The idea behind Kiro Cowork is that it will help every member 
 of the society and not just software developers.
