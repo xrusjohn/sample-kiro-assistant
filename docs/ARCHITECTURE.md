@@ -1,4 +1,4 @@
-# Building Kiro Cowork as a fork of Agent Cowork
+# How did we replace Claude Code CLI in Agent Cowork with Kiro CLI for Kiro Cowork
 
 ## Stack Snapshot
 
