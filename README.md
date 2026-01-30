@@ -64,9 +64,13 @@ You set default model in ~/.kiro/settings/cli.json
 Launch of Claude Cowrker closely followed by Motbot (earlier called Clawdbot) has worken up the popular culture to power of general purpose agents.
 We want Amazonians and Amazon customers to equally participate in this movement while building secure and scalable general purpose agents.
 
-Hence, we document this project extensively in the /docs folder: architecture.md, integration.md, gitlab.md and working-directory.md.
+Hence, we document this project extensively in the /docs folder: 
+[architecture.md](/docs/ARCHITECTURE.md)
+[integration.md](/docs/INTEGRATION.md)
+[gitlab.md](/docs/GITLAB.md)
+[working_directory](/docs/WORKING_DIRECTORY.md)
 
-[architecture.md](docs/architecture.md)
+
 
 We highly encourage you to start contributing to the project. Kiro-CLI is awesome. Let us show its power to the society.
 
