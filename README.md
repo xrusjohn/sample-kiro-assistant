@@ -234,8 +234,9 @@ It didn't just build great tables, it also built great meaningful visualizations
 ## Roadmap
 
 1. Add voice interface
-2. Fix the issue with MCP Servers that need Web Socket connections (e.g. Pencil Desktop MCP)
+2. Fix the issue with MCP Servers that need Web Socket connections (e.g. Pencil Desktop MCP). This issue is not there when using Claude Code CLI.
 3. Sanbox to working directory and select network addresses (Kiro CLI does not yet support Sandboxing)
-4. Integrate Kiro CLI with help of Kiro SDK once it is released, replacing current arrangement through SQLLite database.
+4. Integrate Kiro CLI with help of Kiro SDK once it is released, replacing current arrangement of getting Kiro-CLI responses through SQLLite database. It makes the application a bit slow.
+However, the worst impact is when the CLI tries to run a command that needs user response when running it with "execute_bash". It just doesn't run.
 
 
