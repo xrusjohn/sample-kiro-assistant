@@ -59,6 +59,14 @@ You set default model in ~/.kiro/settings/cli.json
 
 ---
 
+## Promoting builder culture
+Launch of Claude Cowrker closely followed by Motbot (earlier called Clawdbot) has worken up the popular culture to power of general purpose agents.
+We want Amazonians and Amazon customers to equally participate in this movement while building secure and scalable general purpose agents.
+
+Hence, we document this project extensively in the /docs folder: **architecture.md, integration.md, gitlab.md and working-directory.md**.
+We highly encourage you to start contributing to the project. Kiro-CLI is awesome. Let us show its power to the society.
+---
+
 ## Architecture Overview
 
 The architecture is simple. It trusts models to be resourceful and figure out a way. We use powerful models and give them necessary tools. In a way it is inspired
@@ -274,5 +282,6 @@ However, the worst impact is when the CLI tries to run a command that needs user
 
 1. Allow Kiro-CLI to stream its output as JSON responses as Claude Agents SDK does
 2. Deliver Kiro SDK no later than Feb 2026. Kiro CLI has potential to be used as general purpose agent, as well as, a building block for enterprise applications.
+3. Enable token based billing in Kiro CLI so enterprise could use it as a building block for their agentic application.
 
 
