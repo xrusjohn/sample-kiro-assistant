@@ -252,7 +252,10 @@ It has many skills for PPTs, Excel, Videos etc. Here is a simple promotional vid
 
 
 ### Converting articles to audio and video podcasts, great for making training videos (click on the image)
-You can give it article that you don't have time to read. It can convert them to audio podcasts.
+You can give it article that you don't have time to read. It can convert them to audio podcasts.You can ask it do research and make into a podcast.
+For example, here is make a podcast on Moltbot controversy for me. It 1/ did the research, 2/ wrote a script, 3/ produced audio using Elevan Labs (MP3), 
+4/ produced a poster, 5/ stitched together poster and MP3 to produce MP4 using FFMPEG. 
+Just listen and remember this is all being orchestrated autonomously by Kiro-CLI. I did not have to do anything.
 
   <a href="https://www.youtube.com/watch?v=NSRqhYI8oeo">
     <img src="https://img.youtube.com/vi/NSRqhYI8oeo/0.jpg" alt="Video podcast creation" width="100%">
@@ -319,3 +322,4 @@ Local MCPs like excel, playwright don’t need credentials. We also use ZAI MCPs
 This project is to be used only with non-sensitive, non official data.  Typical advisory applicable for any GenAI service applies to this one.
 
 **Remember this is not a production ready project for your sensitive data! **
+**Remember this is not a reference architecture, but a prototype.**
