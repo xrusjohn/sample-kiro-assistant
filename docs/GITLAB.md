@@ -39,5 +39,24 @@ Steps we followed to push Kiro Coworker to `https://gitlab.aws.dev/wwps-asean-sa
 
 7. **Staging vs untracked**
    - `git status` shows tracked files (modified) vs untracked. Stage new files (`git add <file>`) before committing or they won’t be pushed.
+   - To stage only specific files (e.g., updated images or docs), run `git add images/<name>.png docs/<file>.md`, then commit/push. No need to add everything if only a few files changed.
+
+8. **Rebase / conflicts**
+   - If `git push` is rejected because your branch is behind, pull or rebase first:
+     ```
+     git pull origin main
+     # or:
+     git fetch origin
+     git rebase origin/main
+     ```
+     - `git fetch` only downloads remote commits (no merge). `git pull` = fetch + merge.
+     - Use `fetch` when you want to review before merging; use `pull` for a quick sync.
+   - When conflicts occur, edit the files to resolve differences, remove conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`), then:
+     ```
+     git add <file>
+     git rebase --continue   # or git commit if you were merging
+     ```
+   - After resolving all conflicts, run `git push origin main` again.
+    - Rebase requires a clean working tree (no unstaged changes). Commit or stash local edits before running `git rebase`.
 
 Keep this guide handy when setting up a new workstation or pushing significant updates to the AWS GitLab mirror.
