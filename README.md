@@ -216,13 +216,15 @@ It has many skills for PPTs, Excel, Videos etc. Here is a simple promotional vid
   <a href="https://www.youtube.com/watch?v=s46r3NS1V38">
     <img src="https://img.youtube.com/vi/s46r3NS1V38/0.jpg" alt="Kiro announcement" width="100%">
   </a>
--------
+
 
 ### Converting articles to audio and video podcasts (great for making training videos)
+You can give it article that you don't have time to read. It can convert them to audio podcasts.
+If you want to record a training video, you can give it text and it will make a perfectly edited video for you.
   <a href="https://www.youtube.com/watch?v=468Kns96eLA">
-    <img src="https://img.youtube.com/vi/468Kns96eLA/0.jpg" alt="Kiro announcement" width="100%">
+    <img src="https://img.youtube.com/vi/468Kns96eLA/0.jpg" alt="Video podcast creation" width="100%">
   </a>
--------
+
 
 ### Excel Modelling Example
 
