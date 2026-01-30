@@ -66,6 +66,8 @@ We want Amazonians and Amazon customers to equally participate in this movement 
 
 Hence, we document this project extensively in the /docs folder: architecture.md, integration.md, gitlab.md and working-directory.md.
 
+[architecture.md](docs/architecture.md)
+
 We highly encourage you to start contributing to the project. Kiro-CLI is awesome. Let us show its power to the society.
 
 ---
@@ -234,7 +236,7 @@ Replace_with_your_key field.
 5. Social media management
 6. Daily tasks (emails, scheduling)
 
-### Product Video Creation Example
+### Product Video Creation Example (click on the image)
 
 It has many skills for PPTs, Excel, Videos etc. Here is a simple promotional video it made using Remotion-Best-Practices skill.
 
@@ -243,7 +245,7 @@ It has many skills for PPTs, Excel, Videos etc. Here is a simple promotional vid
   </a>
 
 
-### Converting articles to audio and video podcasts (great for making training videos)
+### Converting articles to audio and video podcasts, great for making training videos (click on the image)
 You can give it article that you don't have time to read. It can convert them to audio podcasts.
 If you want to record a training video, you can give it text and it will make a perfectly edited video for you.
   <a href="https://www.youtube.com/watch?v=468Kns96eLA">
