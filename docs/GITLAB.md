@@ -6,15 +6,16 @@ Steps we followed to push Kiro Coworker to `https://gitlab.aws.dev/wwps-asean-sa
    - Repo started as Agent Coworker fork (GitHub remote). We added the AWS GitLab remote and force-pushed when ready.
 
 2. **Midway-signed SSH key**
-   - Generate ECDSA key (`ssh-keygen -t ecdsa`), sign it via `mwinit -k ~/.ssh/id_ecdsa.pub`.
-   - Add to `~/.ssh/config`:
-     ```
-     Host ssh.gitlab.aws.dev
-         User git
-         IdentityFile ~/.ssh/id_ecdsa
-         CertificateFile ~/.ssh/id_ecdsa-cert.pub
-         IdentitiesOnly yes
-     ```
+ssh-keygen -t ecdsa
+mwinit -k ~/.ssh/id_ecdsa.pub
+echo "Host ssh.gitlab.aws.dev     
+    User git
+    IdentityFile ~/.ssh/id_ecdsa
+    CertificateFile ~/.ssh/id_ecdsa-cert.pub
+    IdentitiesOnly yes
+    ProxyCommand none
+    ProxyJump none" >> ~/.ssh/config
+ssh -T ssh.gitlab.aws.dev # tests SSH can reach Gitlab
 
 3. **Git remote**
    - Set origin to the Midway SSH URL:
