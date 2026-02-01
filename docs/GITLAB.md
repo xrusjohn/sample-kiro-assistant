@@ -7,10 +7,11 @@ Steps we followed to push Kiro Coworker to `https://gitlab.aws.dev/wwps-asean-sa
 
 2. **Midway-signed SSH key**
 
-ssh-keygen -t ecdsa
+`ssh-keygen -t ecdsa`
 
-mwinit -k ~/.ssh/id_ecdsa.pub
+`mwinit -k ~/.ssh/id_ecdsa.pub`
 
+```
 echo "Host ssh.gitlab.aws.dev     
     User git
     IdentityFile ~/.ssh/id_ecdsa
@@ -18,8 +19,9 @@ echo "Host ssh.gitlab.aws.dev
     IdentitiesOnly yes
     ProxyCommand none
     ProxyJump none" >> ~/.ssh/config
-    
-ssh -T ssh.gitlab.aws.dev # tests SSH can reach Gitlab
+```
+
+`ssh -T ssh.gitlab.aws.dev # tests SSH can reach Gitlab`
 
 3. **Git remote**
    - Set origin to the Midway SSH URL:
