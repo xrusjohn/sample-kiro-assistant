@@ -183,13 +183,25 @@ export class SessionStore {
     session.abortController = controller;
   }
 
-  recordMessage(sessionId: string, message: StreamMessage): void {
-    const id = ('uuid' in message && message.uuid) ? String(message.uuid) : crypto.randomUUID();
+  recordMessage(sessionId: string, message: StreamMessage, createdAt?: number): void {
+    const storageId = crypto.randomUUID();
+    const timestamp = typeof createdAt === "number" ? createdAt : Date.now();
     this.db
       .prepare(
-        `insert or ignore into messages (id, session_id, data, created_at) values (?, ?, ?, ?)`
+        `insert into messages (id, session_id, data, created_at) values (?, ?, ?, ?)`
       )
-      .run(id, sessionId, JSON.stringify(message), Date.now());
+      .run(storageId, sessionId, JSON.stringify(message), timestamp);
+  }
+
+  replaceSessionMessages(sessionId: string, messages: StreamMessage[]): void {
+    const deleteStmt = this.db.prepare(`delete from messages where session_id = ?`);
+    this.db.transaction((msgs: StreamMessage[]) => {
+      deleteStmt.run(sessionId);
+      const base = Date.now();
+      msgs.forEach((message, index) => {
+        this.recordMessage(sessionId, message, base + index);
+      });
+    })(messages);
   }
 
   deleteSession(id: string): boolean {

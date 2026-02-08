@@ -78,6 +78,19 @@ type SkillsResponse = {
     error?: string;
 }
 
+declare module "qrcode-terminal" {
+    type ErrorLevel = "L" | "M" | "Q" | "H";
+    interface GenerateOptions {
+        small?: boolean;
+    }
+    interface QRCodeTerminal {
+        generate(text: string, opts?: GenerateOptions, callback?: (qr: string) => void): void;
+        setErrorLevel(level: ErrorLevel): void;
+    }
+    const qrcode: QRCodeTerminal;
+    export default qrcode;
+}
+
 type EventPayloadMapping = {
     statistics: Statistics;
     getStaticData: StaticData;

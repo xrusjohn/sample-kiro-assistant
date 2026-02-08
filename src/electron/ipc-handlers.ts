@@ -1,15 +1,32 @@
 import { BrowserWindow } from "electron";
 import type { ClientEvent, ServerEvent } from "./types.js";
 import { runClaude, type RunnerHandle } from "./libs/runner.js";
-import { SessionStore } from "./libs/session-store.js";
+import { SessionStore, type Session } from "./libs/session-store.js";
 import { app } from "electron";
 import { join } from "path";
 import { normalizeWorkingDirectory } from "./libs/util.js";
 import { createWorkspaceDirectory } from "./libs/workspace.js";
+import { loadKiroConversation } from "./libs/kiro-conversation.js";
+import { convertKiroHistoryEntries } from "./libs/kiro-message-adapter.js";
 
 const DB_PATH = join(app.getPath("userData"), "sessions.db");
 const sessions = new SessionStore(DB_PATH);
 const runnerHandles = new Map<string, RunnerHandle>();
+const serverEventListeners = new Set<(event: ServerEvent) => void>();
+
+const hydrateSessionMessages = (session: Session | undefined) => {
+  if (!session?.cwd) return;
+  const normalizedCwd = normalizeWorkingDirectory(session.cwd);
+  if (!normalizedCwd) return;
+  const record = loadKiroConversation(normalizedCwd);
+  if (!record || !Array.isArray(record.history)) return;
+  const streamMessages = convertKiroHistoryEntries(record.history, record.conversationId);
+  sessions.replaceSessionMessages(session.id, streamMessages);
+  sessions.updateSession(session.id, {
+    kiroConversationId: record.conversationId,
+    kiroHistoryCursor: record.history.length
+  });
+};
 
 function broadcast(event: ServerEvent) {
   const payload = JSON.stringify(event);
@@ -33,10 +50,22 @@ function emit(event: ServerEvent) {
     });
   }
   broadcast(event);
+  for (const listener of serverEventListeners) {
+    try {
+      listener(event);
+    } catch (error) {
+      console.error("Server event listener failed:", error);
+    }
+  }
 }
 
 export function handleClientEvent(event: ClientEvent) {
   if (event.type === "session.list") {
+    const storedSessions = sessions.listSessions();
+    for (const stored of storedSessions) {
+      const live = sessions.getSession(stored.id);
+      hydrateSessionMessages(live);
+    }
     emit({
       type: "session.list",
       payload: { sessions: sessions.listSessions() }
@@ -45,6 +74,8 @@ export function handleClientEvent(event: ClientEvent) {
   }
 
   if (event.type === "session.history") {
+    const liveSession = sessions.getSession(event.payload.sessionId);
+    hydrateSessionMessages(liveSession);
     const history = sessions.getSessionHistory(event.payload.sessionId);
     if (!history) {
       emit({
@@ -230,3 +261,8 @@ export function handleClientEvent(event: ClientEvent) {
 }
 
 export { sessions };
+
+export function subscribeToServerEvents(listener: (event: ServerEvent) => void): () => void {
+  serverEventListeners.add(listener);
+  return () => serverEventListeners.delete(listener);
+}

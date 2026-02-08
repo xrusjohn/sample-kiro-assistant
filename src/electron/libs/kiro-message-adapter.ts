@@ -143,6 +143,7 @@ export const convertKiroHistoryEntries = (
   conversationId: string
 ): StreamMessage[] => {
   const messages: StreamMessage[] = [];
+  let lastAssistant: AgentMessage | undefined;
   for (const entry of entries) {
     const userContent = (entry.user?.content ?? {}) as Record<string, any>;
     const assistantContent = entry.assistant ?? {};
@@ -164,26 +165,31 @@ export const convertKiroHistoryEntries = (
     if (toolUse?.tool_uses?.length) {
       const content = convertToolUses(toolUse.tool_uses as ToolUseRecord[]);
       if (content) {
-        messages.push(
-          buildAssistantMessage({
-            conversationId,
-            messageId: toolUse.message_id,
-            content
-          })
-        );
+        const assistantMessage = buildAssistantMessage({
+          conversationId,
+          messageId: toolUse.message_id,
+          content
+        });
+        messages.push(assistantMessage);
+        lastAssistant = assistantMessage;
       }
     }
 
     const response = (assistantContent as Record<string, any>)?.Response;
     if (response?.content) {
       const textBlocks = normalizeTextBlocks(response.content);
-      messages.push(
-        buildAssistantMessage({
-          conversationId,
-          messageId: response.message_id,
-          content: textBlocks
-        })
-      );
+      const assistantMessage = buildAssistantMessage({
+        conversationId,
+        messageId: response.message_id,
+        content: textBlocks
+      });
+      (assistantMessage as any).message.transcript = normalizeTextBlocks(response.content);
+      messages.push(assistantMessage);
+      lastAssistant = assistantMessage;
+    }
+
+    if (lastAssistant && response?.content && 'message' in lastAssistant) {
+      (lastAssistant.message as any).transcript = normalizeTextBlocks(response.content);
     }
   }
   return messages;
