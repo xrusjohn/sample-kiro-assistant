@@ -77,3 +77,9 @@ Our own `sessions.db` mirrors the stream so history persists between app launche
 | Why not use stdout?          | SDK already parsed structured events                     | Kiro CLI stdout is human-readable only, so we poll SQLite for structure  |
 
 Both approaches share the same renderer + IPC plumbing; the main difference is where the “stream” originates (SDK vs. SQLite). The current Kiro integration relies on polling because Kiro CLI does not expose a streaming SDK yet.
+
+### Session history hydration
+
+- During a live run the renderer receives events in real time, but we now also rehydrate `sessions.db` from `~/Library/Application Support/kiro-cli/data.sqlite3` whenever the UI requests `session.list` or `session.history`.
+- This one-time sync rewrites the local `messages` rows with the full history (including the final assistant summary) so reopening a session shows the same conversation that Kiro CLI reported, even if the app was closed mid-stream.
+- The hydration logic lives in `src/electron/ipc-handlers.ts` and uses the same `convertKiroHistoryEntries()` adapter as the streaming poller, keeping both data sources consistent.

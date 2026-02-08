@@ -231,6 +231,7 @@ Replace_with_your_key field.
 - **Kiro CLI missing:** Ensure `kiro-cli` is installed or set `KIRO_CLI_PATH`.
 - **MCP server not showing:** Edit `~/.kiro/agents/agent_config.json` and refresh Settings.
 - **Long-running `execute_bash`:** Some commands (e.g., interactive `npx`) block until they finish. You can ask Kiro Cowork to run them without user input.
+- **`better-sqlite3` ABI mismatch:** If you see `...better_sqlite3.node was compiled against NODE_MODULE_VERSION 137... requires NODE_MODULE_VERSION 140`, run `npx electron-rebuild -f -w better-sqlite3` to rebuild the native module against the Electron ABI you have installed.
 ---
 
 ## Sample Applications
