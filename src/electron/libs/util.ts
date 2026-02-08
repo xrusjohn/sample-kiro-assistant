@@ -1,6 +1,3 @@
-import { claudeCodeEnv } from "./claude-settings.js";
-import { unstable_v2_prompt } from "@anthropic-ai/claude-agent-sdk";
-import type { AgentResultMessage } from "../../shared/agent-schema.js";
 import { app } from "electron";
 import { join, resolve } from "path";
 import { homedir } from "os";
@@ -42,27 +39,11 @@ export function getEnhancedEnv(): Record<string, string | undefined> {
   };
 }
 
-export const claudeCodePath = getClaudeCodePath();
 export const enhancedEnv = getEnhancedEnv();
 
-export const generateSessionTitle = async (userIntent: string | null) => {
+export const generateSessionTitle = async (userIntent: string | null): Promise<string> => {
   if (!userIntent) return "New Session";
-
-  const result: AgentResultMessage = await unstable_v2_prompt(
-    `please analynis the following user input to generate a short but clearly title to identify this conversation theme:
-    ${userIntent}
-    directly output the title, do not include any other content`, {
-    model: claudeCodeEnv.ANTHROPIC_MODEL,
-    env: enhancedEnv,
-    pathToClaudeCodeExecutable: claudeCodePath,
-  });
-
-  if (result.subtype === "success") {
-    return result.result;
-  }
-
-
-  return "New Session";
+  return userIntent.split(/[.!?\n]/)[0]?.slice(0, 64).trim() || "New Session";
 };
 
 export function normalizeWorkingDirectory(value?: string | null): string | undefined {
