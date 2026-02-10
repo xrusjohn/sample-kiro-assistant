@@ -11,7 +11,7 @@
 		"build": "tsc -b && vite build",
 		"lint": "eslint .",
 		"preview": "vite preview",
-		"transpile:electron": "tsc --project src/electron/tsconfig.json",
+		"transpile:electron": "./node_modules/.bin/tsc --project src/electron/tsconfig.json && mkdir -p dist-electron/shared && cp src/shared/models.json dist-electron/shared/models.json",
 		"dist:mac": "bun run transpile:electron && bun run build && bunx electron-builder --mac --arm64",
 		"dist:win": "bun run transpile:electron && bun run build && electron-builder --win --x64",
 		"dist:linux": "bun run transpile:electron && bun run build && electron-builder --linux --x64"

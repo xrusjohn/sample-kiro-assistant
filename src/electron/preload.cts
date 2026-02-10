@@ -50,7 +50,11 @@ electron.contextBridge.exposeInMainWorld("electron", {
     copyFilesToCwd: (payload: CopyFilesPayload) =>
         ipcInvoke("copy-files-to-cwd", payload),
     getSkills: () =>
-        ipcInvoke("get-skills")
+        ipcInvoke("get-skills"),
+    getModelSettings: () =>
+        ipcInvoke("get-model-settings"),
+    setDefaultModel: (payload: SetDefaultModelPayload) =>
+        ipcInvoke("set-default-model", payload)
 } satisfies Window['electron'])
 
 function ipcInvoke<Key extends keyof EventPayloadMapping>(key: Key, ...args: any[]): Promise<EventPayloadMapping[Key]> {

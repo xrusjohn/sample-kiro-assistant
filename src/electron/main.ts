@@ -15,13 +15,16 @@ import { resolveKiroCliBinary } from "./libs/kiro-cli.js";
 import { getKiroMcpSettingsPath, loadKiroMcpServers, setKiroMcpServerDisabled } from "./libs/mcp-config.js";
 import { ensureWorkspaceRoot } from "./libs/workspace.js";
 import { loadSkills } from "./libs/skill-loader.js";
+import { loadAssistantSettings, saveAssistantSettings, getAssistantSettingsPath, type AssistantSettings } from "./libs/app-settings.js";
+import { models as availableModels, DEFAULT_MODEL_ID } from "../shared/models.js";
 import type { ClientEvent } from "./types.js";
 import "./libs/claude-settings.js";
 
 const execAsync = promisify(exec);
-
+let assistantSettings: AssistantSettings = {};
 app.on("ready", () => {
     ensureWorkspaceRoot();
+    assistantSettings = loadAssistantSettings();
     const mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
@@ -98,6 +101,34 @@ app.on("ready", () => {
             return null;
         }
         return result.filePaths;
+    });
+
+    ipcMainHandle("get-model-settings", () => {
+        const configuredModelId = assistantSettings.defaultModel?.trim() || null;
+        const currentModelId = configuredModelId || DEFAULT_MODEL_ID;
+        return {
+            models: availableModels,
+            currentModelId,
+            configuredModelId,
+            environmentModelId: null,
+            source: configuredModelId ? "custom" : "default",
+            settingsPath: getAssistantSettingsPath()
+        };
+    });
+
+    ipcMainHandle("set-default-model", (_: any, payload: { modelId: string }) => {
+        const modelId = typeof payload?.modelId === "string" ? payload.modelId.trim() : "";
+        const valid = availableModels.find((model) => model.id === modelId);
+        if (!valid) {
+            return { success: false, error: "Unknown model selected." };
+        }
+        assistantSettings = { ...assistantSettings, defaultModel: modelId };
+        saveAssistantSettings(assistantSettings);
+        return {
+            success: true,
+            currentModelId: modelId,
+            source: "custom"
+        };
     });
 
     // Text file extensions that can be displayed in the app

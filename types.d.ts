@@ -10,6 +10,32 @@ type StaticData = {
     totalMemoryGB: number;
 }
 
+type ModelInfo = {
+    id: string;
+    label: string;
+    price: string;
+    description: string;
+};
+
+type ModelSettingsResponse = {
+    models: ModelInfo[];
+    currentModelId: string;
+    configuredModelId?: string | null;
+    source: "custom" | "default";
+    settingsPath?: string | null;
+};
+
+type SetDefaultModelPayload = {
+    modelId: string;
+};
+
+type SetDefaultModelResult = {
+    success: boolean;
+    currentModelId?: string;
+    source?: "custom";
+    error?: string;
+};
+
 type UnsubscribeFunction = () => void;
 
 type FileReadResult = {
@@ -107,6 +133,8 @@ type EventPayloadMapping = {
     "copy-files-to-cwd": CopyFilesResult;
     "run-kiro-command": KiroCommandResult;
     "get-skills": SkillsResponse;
+    "get-model-settings": ModelSettingsResponse;
+    "set-default-model": SetDefaultModelResult;
 }
 
 interface Window {
@@ -130,5 +158,7 @@ interface Window {
         runKiroCommand: (payload: KiroCommandPayload) => Promise<KiroCommandResult>;
         copyFilesToCwd: (payload: CopyFilesPayload) => Promise<CopyFilesResult>;
         getSkills: () => Promise<SkillsResponse>;
+        getModelSettings: () => Promise<ModelSettingsResponse>;
+        setDefaultModel: (payload: SetDefaultModelPayload) => Promise<SetDefaultModelResult>;
     }
 }

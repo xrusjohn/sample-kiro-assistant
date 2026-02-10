@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   AgentAssistantMessage,
   AgentMessage,
@@ -16,7 +16,6 @@ type ToolResultContent = AgentUserMessage["message"]["content"][number];
 type ToolStatus = "pending" | "success" | "error";
 const toolStatusMap = new Map<string, ToolStatus>();
 const toolStatusListeners = new Set<() => void>();
-const MAX_VISIBLE_LINES = 3;
 
 type AskUserQuestionInput = {
   questions?: Array<{
@@ -106,8 +105,6 @@ function extractTagContent(input: string, tag: string): string | null {
 
 const ToolResult = ({ messageContent }: { messageContent: ToolResultContent }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
-  const isFirstRender = useRef(true);
   let lines: string[] = [];
   
   if (messageContent.type !== "tool_result") return null;
@@ -129,30 +126,32 @@ const ToolResult = ({ messageContent }: { messageContent: ToolResultContent }) =
   }
 
   const isMarkdownContent = isMarkdown(lines.join("\n"));
-  const hasMoreLines = lines.length > MAX_VISIBLE_LINES;
-  const visibleContent = hasMoreLines && !isExpanded ? lines.slice(0, MAX_VISIBLE_LINES).join("\n") : lines.join("\n");
-
   useEffect(() => { setToolStatus(toolUseId, status); }, [toolUseId, status]);
-  useEffect(() => {
-    if (!hasMoreLines || isFirstRender.current) { isFirstRender.current = false; return; }
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [hasMoreLines, isExpanded]);
 
   return (
-    <div className="flex flex-col mt-4">
-      <div className="header text-accent">Output</div>
-      <div className="mt-2 rounded-xl bg-surface-tertiary p-3">
-        <pre className={`text-sm whitespace-pre-wrap break-words font-mono ${isError ? "text-red-500" : "text-ink-700"}`}>
-          {isMarkdownContent ? <MDContent text={visibleContent} /> : visibleContent}
-        </pre>
-        {hasMoreLines && (
-          <button onClick={() => setIsExpanded(!isExpanded)} className="mt-2 text-sm text-accent hover:text-accent-hover transition-colors flex items-center gap-1">
-            <span>{isExpanded ? "▲" : "▼"}</span>
-            <span>{isExpanded ? "Collapse" : `Show ${lines.length - MAX_VISIBLE_LINES} more lines`}</span>
-          </button>
-        )}
-        <div ref={bottomRef} />
+    <div className="flex flex-col mt-4 rounded-xl border border-ink-900/10 bg-surface-tertiary px-3 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <StatusDot variant={status} isActive={false} isVisible />
+          <span className="text-sm font-medium text-ink-900">Tool Output</span>
+        </div>
+        <button
+          onClick={() => setIsExpanded((prev) => !prev)}
+          className="text-xs font-medium text-accent hover:text-accent-hover transition-colors"
+        >
+          {isExpanded ? "Hide output" : "Show output"}
+        </button>
       </div>
+      {!isExpanded && (
+        <p className="mt-2 text-xs text-muted">
+          Output hidden{lines.length ? ` (${lines.length} lines)` : ""}.
+        </p>
+      )}
+      {isExpanded && (
+        <div className={`mt-3 text-sm whitespace-pre-wrap break-words ${isError ? "text-red-500" : "text-ink-700"}`}>
+          {isMarkdownContent ? <MDContent text={lines.join("\n")} /> : <pre>{lines.join("\n")}</pre>}
+        </div>
+      )}
     </div>
   );
 };
@@ -273,6 +272,16 @@ const SystemInfoCard = ({ message, showIndicator = false }: { message: AgentMess
   );
 };
 
+const ModelInfoCard = ({ message }: { message: AgentMessage }) => {
+  const text = (message as any)?.message?.content?.[0]?.text ?? "";
+  if (!text) return null;
+  return (
+    <div className="flex items-center gap-2 mt-2 text-sm text-ink-700">
+      <span className="rounded-full bg-surface-secondary px-3 py-1 text-xs font-medium text-ink-900">{text}</span>
+    </div>
+  );
+};
+
 const UserMessageCard = ({ message, showIndicator = false }: { message: { type: "user_prompt"; prompt: string }; showIndicator?: boolean }) => (
   <div className="flex flex-col mt-4">
     <div className="header text-accent flex items-center gap-2">
@@ -305,6 +314,10 @@ export function MessageCard({
   const sdkMessage = message as AgentMessage;
 
   if (sdkMessage.type === "system") {
+    const subtype = (sdkMessage as any)?.subtype;
+    if (subtype === "model-info") {
+      return <ModelInfoCard message={sdkMessage} />;
+    }
     return <SystemInfoCard message={sdkMessage} showIndicator={showIndicator} />;
   }
 
@@ -323,7 +336,30 @@ export function MessageCard({
   }
 
   if (sdkMessage.type === "assistant") {
-    const contents = sdkMessage.message.content;
+    const contents = sdkMessage.message.content as MessageContent[];
+    const transcriptBlocks = (sdkMessage.message as any)?.transcript;
+    if (Array.isArray(transcriptBlocks) && transcriptBlocks.length) {
+      const transcriptText = transcriptBlocks.map((block: any) => block.text ?? "").join("\n\n");
+      return (
+        <>
+          <AssistantBlockCard title="Assistant" text={transcriptText} showIndicator={showIndicator} />
+          {contents
+            .filter((content) => content.type === "tool_use")
+            .map((content, idx) =>
+              content.name === "AskUserQuestion" ? (
+                <AskUserQuestionCard
+                  key={`tool-${idx}`}
+                  messageContent={content}
+                  permissionRequest={permissionRequest}
+                  onPermissionResult={onPermissionResult}
+                />
+              ) : (
+                <ToolUseCard key={`tool-${idx}`} messageContent={content} showIndicator={false} />
+              )
+            )}
+        </>
+      );
+    }
     return (
       <>
         {contents.map((content: MessageContent, idx: number) => {

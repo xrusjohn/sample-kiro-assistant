@@ -1,11 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import type { McpServersMap, SkillInfo } from "../types";
 import { useAppStore } from "../store/useAppStore";
+import { DEFAULT_MODEL_ID, type ModelInfo } from "@/shared/models";
 
 type SettingsModalProps = {
   open: boolean;
   onClose: () => void;
+};
+
+type ModelSettings = {
+  models: ModelInfo[];
+  currentModelId: string;
+  configuredModelId?: string | null;
+  source: "custom" | "default";
+  settingsPath?: string | null;
 };
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
@@ -19,6 +28,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [updatingServer, setUpdatingServer] = useState<string | null>(null);
   const cliInteractive = useAppStore((state) => state.cliInteractive);
   const setCliInteractive = useAppStore((state) => state.setCliInteractive);
+  const [modelSettings, setModelSettings] = useState<ModelSettings | null>(null);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [updatingModel, setUpdatingModel] = useState(false);
 
   const serverEntries = useMemo(
     () => Object.entries(servers).sort(([a], [b]) => a.localeCompare(b)),
@@ -29,6 +42,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     () => [...skills].sort((a, b) => a.name.localeCompare(b.name)),
     [skills]
   );
+  const selectedModel = useMemo<ModelInfo | null>(() => {
+    if (!modelSettings) return null;
+    return modelSettings.models.find((model) => model.id === modelSettings.currentModelId) ?? null;
+  }, [modelSettings]);
 
   const fetchServers = useCallback(async () => {
     setLoadingServers(true);
@@ -65,15 +82,62 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }, []);
 
+  const fetchModelSettings = useCallback(async () => {
+    setModelLoading(true);
+    setModelError(null);
+    try {
+      const response = await window.electron.getModelSettings();
+      setModelSettings(response);
+    } catch (error) {
+      setModelSettings(null);
+      setModelError(error instanceof Error ? error.message : "Unable to load model settings");
+    } finally {
+      setModelLoading(false);
+    }
+  }, []);
+
+  const handleModelChange = useCallback(
+    async (event: ChangeEvent<HTMLSelectElement>) => {
+      const modelId = event.target.value;
+      if (!modelId) return;
+      setUpdatingModel(true);
+      setModelError(null);
+      try {
+        const result = await window.electron.setDefaultModel({ modelId });
+        if (!result.success || !result.currentModelId) {
+          throw new Error(result.error || "Failed to update model");
+        }
+        const nextModelId = result.currentModelId as string;
+        setModelSettings((prev: ModelSettings | null): ModelSettings | null =>
+          prev
+            ? {
+                ...prev,
+                currentModelId: nextModelId,
+                configuredModelId: nextModelId,
+                source: "custom"
+              }
+            : prev
+        );
+      } catch (error) {
+        setModelError(error instanceof Error ? error.message : "Unable to update model");
+      } finally {
+        setUpdatingModel(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     if (!open) {
       setServerError(null);
       setSkillsError(null);
+      setModelError(null);
       return;
     }
     fetchServers();
     fetchSkills();
-  }, [open, fetchServers, fetchSkills]);
+    fetchModelSettings();
+  }, [open, fetchServers, fetchSkills, fetchModelSettings]);
 
   const handleToggleServer = useCallback(
     async (name: string) => {
@@ -130,6 +194,59 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           {serverError && (
             <div className="rounded-xl border border-error/20 bg-error/5 px-3 py-2 text-sm text-error">{serverError}</div>
           )}
+
+          <section className="rounded-2xl border border-ink-900/10 bg-surface-secondary/70 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-ink-900">Default Model</h3>
+                <p className="text-xs text-muted">
+                  {modelSettings
+                    ? `Currently using ${modelSettings.currentModelId}`
+                    : "Loading current model..."}
+                </p>
+              </div>
+              <button
+                className="text-xs font-medium text-ink-500 hover:text-ink-900 disabled:opacity-50"
+                onClick={fetchModelSettings}
+                disabled={modelLoading}
+              >
+                Refresh
+              </button>
+            </div>
+            {modelError && (
+              <div className="mt-3 rounded-lg border border-error/20 bg-error/5 px-3 py-2 text-xs text-error">{modelError}</div>
+            )}
+            <div className="mt-3">
+              <label className="text-xs font-medium text-muted" htmlFor="model-select">
+                Select model
+              </label>
+              <select
+                id="model-select"
+                className="mt-1 w-full rounded-xl border border-ink-200 bg-surface px-3 py-2 text-sm text-ink-900 focus:border-accent focus:outline-none"
+                value={modelSettings?.currentModelId ?? ""}
+                onChange={handleModelChange}
+                disabled={modelLoading || updatingModel || !modelSettings}
+              >
+                {!modelSettings && <option value="">Loading…</option>}
+                {modelSettings?.models.map((model: ModelInfo) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label} ({model.price})
+                  </option>
+                ))}
+              </select>
+              {modelSettings?.source === "custom" && modelSettings.settingsPath && (
+                <p className="mt-2 text-xs text-muted">
+                  Stored in <code>{modelSettings.settingsPath}</code>
+                </p>
+              )}
+              {modelSettings?.source === "default" && (
+                <p className="mt-2 text-xs text-muted">Using built-in default ({DEFAULT_MODEL_ID}).</p>
+              )}
+              {selectedModel && (
+                <p className="mt-3 text-sm text-ink-700">{selectedModel.description}</p>
+              )}
+            </div>
+          </section>
 
           <section className="rounded-2xl border border-ink-900/10 bg-surface-secondary/70 p-4">
             <div className="flex items-center justify-between">

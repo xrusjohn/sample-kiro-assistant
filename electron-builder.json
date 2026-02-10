@@ -11,7 +11,7 @@
     "asarUnpack": [
         "node_modules/@anthropic-ai/claude-agent-sdk/**/*"
     ],
-    "icon": "./aws-logo-512.png",
+    "icon": "./Kiro-the-spirit.png",
     "mac": {
         "target": "dmg"
     },

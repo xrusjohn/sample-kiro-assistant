@@ -57,19 +57,7 @@ Task: Make me an audio podcast of 3 minutes on moltbot controvery. I want to upl
 ## Model & Provider Compatibility
 
 If a model works in `kiro-cli`, it works in Kiro Assistant. So for example, MiniMax M2 can be selected in Kiro CLI, so it will work with Kiro Assistant.
-You set default model in ~/.kiro/settings/cli.json
-
-The most common launch setup is to export `KIRO_DEFAULT_MODEL=<model-id>` before starting Kiro Assistant (or via `launchctl setenv` when launching from Finder). For example:
-
-```bash
-# Terminal-launched app
-export KIRO_DEFAULT_MODEL=claude-sonnet-4.5
-open -a "Kiro Assistant"
-
-# Finder/launcher (persist across app launches)
-launchctl setenv KIRO_DEFAULT_MODEL claude-sonnet-4.5
-# Later, to clear: launchctl unsetenv KIRO_DEFAULT_MODEL
-```
+Kiro Assistant always uses the model stored in `~/Library/Application Support/kiro-assistant/assistant-settings.json` (managed through the Settings → Default Model dropdown). If you haven’t picked one yet, it falls back to `claude-opus-4.5`. Every prompt launches a fresh `kiro-cli` process using whatever model is currently selected, so changing the dropdown takes effect on the very next run.
 
 Available models today:
 
@@ -169,7 +157,7 @@ bun run dist:mac
 
 The macOS bundle is emitted to `dist/mac-arm64/Kiro Assistant.app`. Copy it into `/Applications` (back up any previous version first).
 
-> We spawn `kiro-cli chat --no-interactive --trust-all-tools --wrap never --model claude-opus-4.5 --agent kiro-assistant`. Override defaults with `KIRO_DEFAULT_MODEL` / `KIRO_AGENT` before launching the app.
+> We spawn `kiro-cli chat --no-interactive --trust-all-tools --wrap never --model <selected-model> --agent kiro-assistant`. Pick the model from Settings → Default Model (or let it use the built-in default).
 
 ---
 
@@ -363,4 +351,3 @@ This project is to be used only with non-sensitive, non official data.  Typical
 ## Model & Provider Compatibility
 
 If a model works in `kiro-cli`, it works in Kiro Assistant. So for example, MiniMax M2 can be selected in Kiro CLI, so it will work with Kiro Assistant.
-You set default model in ~/.kiro/settings/cli.json

@@ -147,8 +147,8 @@ In other words, our own logic only touches a handful of TypeScript files, but th
 
 ### CLI invocation & inputs
 
-- `runClaude()` spawns `kiro-cli chat --no-interactive --trust-all-tools --wrap never --model <...> --agent <...> [--resume] "<prompt>"`. By default the model is `claude-opus-4.5` and the agent profile is `kiro-assistant`, but you can override them via `KIRO_DEFAULT_MODEL` / `KIRO_AGENT`. `--resume` is included only when we have a stored conversation ID for that directory.
-- Environment variables (`KIRO_DEFAULT_MODEL`, `KIRO_AGENT`, plus the enhanced PATH) control model/agent defaults. Users override them before launching Kiro Assistant if needed.
+- `runClaude()` spawns `kiro-cli chat --no-interactive --trust-all-tools --wrap never --model <...> --agent <...> [--resume] "<prompt>"`. The model comes from the persisted setting (`assistant-settings.json`, defaulting to `claude-opus-4.5`) and the agent profile remains `kiro-assistant`. `--resume` is included only when we have a stored conversation ID for that directory.
+- Environment variables now only augment PATH; model selection is purely controlled through the app’s Settings dropdown and persisted to disk.
 - Slash commands and uploads operate on the session workspace: slash commands shell out to the same directory, and uploads copy files into that folder so Kiro sees them.
 - Kiro CLI writes its entire conversation history into a single row per workspace (`~/Library/Application Support/kiro-cli/data.sqlite3`, table `conversations_v2`). The `history` array grows with each tool call/result. Kiro Assistant keeps a cursor (`kiroHistoryCursor`) and on each poll slices `history[cursor:]`, converts the new entries, and forwards them to the renderer.
 - You can inspect the raw log manually via `sqlite3 ~/Library/Application\ Support/kiro-cli/data.sqlite3` and `SELECT key,value FROM conversations_v2 WHERE key='<workspace path>'`.
@@ -206,7 +206,7 @@ This flow allows a reopened session to display historical messages instantly (fr
 
 `enhancedEnv` (in `src/electron/libs/util.ts`) prepends Homebrew, bun, `.local/bin`, nvm/fnm/volta shims, `/usr/local/bin`, `/usr/bin`, etc. to PATH. Every CLI invocation adds `NO_COLOR=1`, `CLICOLOR=0`, and `KIRO_CLI_DISABLE_PAGER=1` to keep the output machine-friendly.
 
-Kiro Assistant passes `--model <ID>` and `--agent <name>` to every `kiro-cli chat` invocation. The defaults are `claude-sonnet-4.5` and `kiro-assistant`, but you can override them by exporting `KIRO_DEFAULT_MODEL` and/or `KIRO_AGENT` before launching the app (e.g., `KIRO_DEFAULT_MODEL=claude-opus-4.5 KIRO_AGENT=my-profile bun run dev`).
+Kiro Assistant passes `--model <ID>` and `--agent <name>` to every `kiro-cli chat` invocation. The model ID is whatever you selected in Settings (or `claude-opus-4.5` if untouched), and the agent profile is `kiro-assistant`.
 
 > **Why do I see both `kiro-cli` and `kiro-cli-chat` in `ps`?**  
 > The `kiro-cli` binary is a lightweight launcher that resolves the agent profile and spawns the actual conversation engine (`kiro-cli-chat`). When Kiro Assistant starts a session the OS therefore shows two processes: the launcher (`kiro-cli …`) and the runtime worker (`kiro-cli-chat …`). Both carry the same flags and exit when the session completes.

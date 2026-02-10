@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import type { ServerEvent, StreamMessage } from "../types.js";
 import type { Session } from "./session-store.js";
 import { enhancedEnv, normalizeWorkingDirectory } from "./util.js";
@@ -12,6 +13,7 @@ export type RunnerOptions = {
   resumeSessionId?: string;
   onEvent: (event: ServerEvent) => void;
   onSessionUpdate?: (updates: Partial<Session>) => void;
+  getModel: () => string;
 };
 
 export type RunnerHandle = {
@@ -64,7 +66,7 @@ export async function runClaude(options: RunnerOptions): Promise<RunnerHandle> {
   }
 
   const normalizedCwd = normalizeWorkingDirectory(session.cwd) ?? DEFAULT_CWD;
-  const model = (process.env.KIRO_DEFAULT_MODEL ?? "claude-opus-4.5").trim();
+  const model = options.getModel().trim();
   const agent = (process.env.KIRO_AGENT ?? "kiro-assistant").trim();
   const interactive = session.interactive === true;
   const args = ["chat", "--trust-all-tools", "--wrap", "never"];
@@ -84,6 +86,35 @@ export async function runClaude(options: RunnerOptions): Promise<RunnerHandle> {
     args.push(prompt);
   }
 
+  const emitModelSelection = () => {
+    onEvent({
+      type: "stream.message",
+      payload: {
+        sessionId: session.id,
+        message: {
+          type: "system",
+          message: {
+            id: crypto.randomUUID(),
+            role: "system",
+            content: [
+              {
+                type: "text",
+                text: `**Model:** ${model || "unknown"}`
+              }
+            ]
+          } as any,
+          subtype: "meta",
+          model,
+          session_id: session.id,
+          uuid: crypto.randomUUID() as any,
+          session_id_display: session.id,
+          permissionMode: interactive ? "interactive" : "non-interactive",
+          cwd: normalizedCwd
+        } as any
+      }
+    });
+  };
+
   const child = spawn(binary, args, {
     cwd: normalizedCwd,
     env: {
@@ -93,6 +124,7 @@ export async function runClaude(options: RunnerOptions): Promise<RunnerHandle> {
       KIRO_CLI_DISABLE_PAGER: "1"
     }
   });
+  emitModelSelection();
 
   let closed = false;
   let aborted = false;

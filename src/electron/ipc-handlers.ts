@@ -8,11 +8,15 @@ import { normalizeWorkingDirectory } from "./libs/util.js";
 import { createWorkspaceDirectory } from "./libs/workspace.js";
 import { loadKiroConversation } from "./libs/kiro-conversation.js";
 import { convertKiroHistoryEntries } from "./libs/kiro-message-adapter.js";
+import { loadAssistantSettings } from "./libs/app-settings.js";
+import { DEFAULT_MODEL_ID } from "../shared/models.js";
 
 const DB_PATH = join(app.getPath("userData"), "sessions.db");
 const sessions = new SessionStore(DB_PATH);
 const runnerHandles = new Map<string, RunnerHandle>();
 const serverEventListeners = new Set<(event: ServerEvent) => void>();
+
+const resolveModelId = () => loadAssistantSettings().defaultModel?.trim() || DEFAULT_MODEL_ID;
 
 const hydrateSessionMessages = (session: Session | undefined) => {
   if (!session?.cwd) return;
@@ -122,10 +126,13 @@ export function handleClientEvent(event: ClientEvent) {
       payload: { sessionId: session.id, prompt: event.payload.prompt }
     });
 
+    const modelId = resolveModelId();
+    session.selectedModel = modelId;
     runClaude({
       prompt: event.payload.prompt,
       session,
       resumeSessionId: session.kiroConversationId,
+      getModel: () => modelId,
       onEvent: emit,
       onSessionUpdate: (updates) => {
         sessions.updateSession(session.id, updates);
@@ -183,10 +190,13 @@ export function handleClientEvent(event: ClientEvent) {
       payload: { sessionId: session.id, prompt: event.payload.prompt }
     });
 
+    const modelId = resolveModelId();
+    session.selectedModel = modelId;
     runClaude({
       prompt: event.payload.prompt,
       session,
       resumeSessionId: session.kiroConversationId,
+      getModel: () => modelId,
       onEvent: emit,
       onSessionUpdate: (updates) => {
         sessions.updateSession(session.id, updates);

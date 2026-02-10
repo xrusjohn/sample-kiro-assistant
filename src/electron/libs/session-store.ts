@@ -18,6 +18,7 @@ export type Session = {
   allowedTools?: string;
   lastPrompt?: string;
   interactive?: boolean;
+  selectedModel?: string;
   pendingPermissions: Map<string, PendingPermission>;
   abortController?: AbortController;
 };
