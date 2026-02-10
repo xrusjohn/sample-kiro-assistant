@@ -59,7 +59,19 @@ Task: Make me an audio podcast of 3 minutes on moltbot controvery. I want to upl
 If a model works in `kiro-cli`, it works in Kiro Cowork. So for example, MiniMax M2 can be selected in Kiro CLI, so it will work with Kiro Cowork.
 You set default model in ~/.kiro/settings/cli.json
 
-The most common launch setup is to export `KIRO_DEFAULT_MODEL=<model-id>` before starting Kiro Cowork (or via `launchctl setenv` when launching from Finder). Available models today:
+The most common launch setup is to export `KIRO_DEFAULT_MODEL=<model-id>` before starting Kiro Cowork (or via `launchctl setenv` when launching from Finder). For example:
+
+```bash
+# Terminal-launched app
+export KIRO_DEFAULT_MODEL=claude-sonnet-4.5
+open -a "Kiro Coworker"
+
+# Finder/launcher (persist across app launches)
+launchctl setenv KIRO_DEFAULT_MODEL claude-sonnet-4.5
+# Later, to clear: launchctl unsetenv KIRO_DEFAULT_MODEL
+```
+
+Available models today:
 
 - `claude-opus-4.6` – experimental Claude Opus 4.6
 - `claude-opus-4.6-1m` – experimental Opus 4.6 with 1M context
