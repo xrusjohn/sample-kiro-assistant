@@ -18,6 +18,16 @@ const getKiroConversationDb = (): Database.Database | undefined => {
   return cachedDb;
 };
 
+export const invalidateKiroConversationCache = (): void => {
+  try {
+    cachedDb?.close();
+  } catch {
+    // ignore
+  }
+  cachedDb = undefined;
+  cachedPath = undefined;
+};
+
 export type KiroHistoryEntry = {
   user?: Record<string, unknown>;
   assistant?: Record<string, unknown>;
@@ -71,4 +81,38 @@ export const listRecentKiroConversations = (limit = 20): KiroConversationRecord[
     .prepare("select key, conversation_id, value, updated_at from conversations_v2 order by updated_at desc limit ?")
     .all(limit) as ConversationRow[];
   return rows.map((row) => parseConversationRow(row)).filter(Boolean) as KiroConversationRecord[];
+};
+
+export const updateConversationDefaultModel = (key: string, model: string): boolean => {
+  const path = resolveKiroDataPath();
+  if (!path || !model.trim()) return false;
+  let db: Database.Database | undefined;
+  try {
+    db = new Database(path);
+    const row = db
+      .prepare("select key, value from conversations_v2 where key = ?")
+      .get(key) as ConversationRow | undefined;
+    if (!row) return false;
+    const parsed = JSON.parse(row.value) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") return false;
+    const next = { ...parsed };
+    const defaultParams = typeof next.default_params === "object" && next.default_params !== null
+      ? { ...(next.default_params as Record<string, unknown>) }
+      : {};
+    defaultParams.model = model;
+    next.default_params = defaultParams;
+    const serialized = JSON.stringify(next);
+    db.prepare("update conversations_v2 set value = ? where key = ?").run(serialized, key);
+    invalidateKiroConversationCache();
+    return true;
+  } catch (error) {
+    console.warn("Failed to update conversation model:", error);
+    return false;
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      // ignore
+    }
+  }
 };

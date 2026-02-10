@@ -57,7 +57,7 @@ Task: Make me an audio podcast of 3 minutes on moltbot controvery. I want to upl
 
 
 If a model works in `kiro-cli`, it works in Kiro Assistant. So for example, MiniMax M2 can be selected in Kiro CLI, so it will work with Kiro Assistant.
-Kiro Assistant always uses the model stored in `~/Library/Application Support/kiro-assistant/assistant-settings.json` (managed through the Settings → Default Model dropdown). If you haven’t picked one yet, it falls back to `claude-opus-4.5`. Every prompt launches a fresh `kiro-cli` process using whatever model is currently selected, so changing the dropdown takes effect on the very next run.
+Kiro Assistant always uses the model stored in `~/Library/Application Support/kiro-assistant/assistant-settings.json` (managed through the Settings → Default Model dropdown). If you haven’t picked one yet, it falls back to `claude-opus-4.5`. Every prompt launches a fresh `kiro-cli` process using whatever model is currently selected, so changing the dropdown takes effect on the very next run. **Current limitation:** because the conversation metadata is cached by `kiro-cli`, mid-task changes are only picked up after starting a *new task* (which creates a new working directory). If you switch models midway through an existing task, that session will continue using the originally selected model until you spin up another task.
 
 Available models today:
 

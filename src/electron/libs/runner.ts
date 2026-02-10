@@ -165,7 +165,7 @@ export async function runClaude(options: RunnerOptions): Promise<RunnerHandle> {
     const previousCursor = Math.max(0, session.kiroHistoryCursor ?? 0);
     const cursor = Math.min(previousCursor, totalEntries);
     const newEntries = record.history.slice(cursor);
-    const streamMessages = convertKiroHistoryEntries(newEntries, record.conversationId);
+    const streamMessages = convertKiroHistoryEntries(newEntries, record.conversationId, { fallbackModel: model });
 
     for (const message of streamMessages) {
       sendStreamMessage(session.id, message, onEvent);

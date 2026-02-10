@@ -20,6 +20,36 @@ type ToolUseResultsRecord = {
   stderr?: string;
 };
 
+const pickModelString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+};
+
+const extractModelFromMetadata = (metadata?: Record<string, unknown>): string | undefined => {
+  if (!metadata) return undefined;
+  const candidateKeys = ["model", "model_id", "selected_model", "selectedModel", "modelName", "default_model"] as const;
+  for (const key of candidateKeys) {
+    const candidate = pickModelString((metadata as Record<string, unknown>)[key]);
+    if (candidate) return candidate;
+  }
+
+  const nestedKeys = ["default_params", "request", "options", "config"] as const;
+  for (const nestedKey of nestedKeys) {
+    const nestedValue = (metadata as Record<string, unknown>)[nestedKey];
+    if (!nestedValue || typeof nestedValue !== "object") continue;
+    const nested = nestedValue as Record<string, unknown>;
+    const nestedCandidate = pickModelString(
+      (nested["model"] as string | undefined) ??
+      (nested["model_id"] as string | undefined) ??
+      (nested["selected_model"] as string | undefined)
+    );
+    if (nestedCandidate) return nestedCandidate;
+  }
+
+  return undefined;
+};
+
 const normalizeTextBlocks = (value: unknown): Array<{ type: "text"; text: string }> => {
   if (value === null || value === undefined) {
     return [{ type: "text", text: "" }];
@@ -140,16 +170,19 @@ const convertToolUses = (toolUses: ToolUseRecord[] | undefined) => {
 
 export const convertKiroHistoryEntries = (
   entries: KiroHistoryEntry[],
-  conversationId: string
+  conversationId: string,
+  options?: { fallbackModel?: string }
 ): StreamMessage[] => {
   const messages: StreamMessage[] = [];
   let lastAssistant: AgentMessage | undefined;
+  const fallbackModel = pickModelString(options?.fallbackModel);
   for (const entry of entries) {
     const userContent = (entry.user?.content ?? {}) as Record<string, any>;
     const assistantContent = entry.assistant ?? {};
     const metadata = entry.request_metadata ?? {};
     const metadataMessageId =
       typeof metadata?.message_id === "string" ? metadata.message_id : undefined;
+    const metadataModel = extractModelFromMetadata(metadata) ?? fallbackModel;
 
     const promptText = userContent?.Prompt?.prompt;
     if (typeof promptText === "string" && promptText.trim()) {
@@ -170,6 +203,9 @@ export const convertKiroHistoryEntries = (
           messageId: toolUse.message_id,
           content
         });
+        if (metadataModel) {
+          (assistantMessage as any).model = metadataModel;
+        }
         messages.push(assistantMessage);
         lastAssistant = assistantMessage;
       }
@@ -184,6 +220,9 @@ export const convertKiroHistoryEntries = (
         content: textBlocks
       });
       (assistantMessage as any).message.transcript = normalizeTextBlocks(response.content);
+      if (metadataModel) {
+        (assistantMessage as any).model = metadataModel;
+      }
       messages.push(assistantMessage);
       lastAssistant = assistantMessage;
     }

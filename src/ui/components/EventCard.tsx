@@ -103,10 +103,30 @@ function extractTagContent(input: string, tag: string): string | null {
   return match ? match[1] : null;
 }
 
+const tryFormatJsonContent = (text: string): string | null => {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const isJsonCandidate = (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"));
+  if (!isJsonCandidate) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return null;
+  }
+};
+
+const formatModelBadge = (model: unknown): string | null => {
+  if (typeof model !== "string") return null;
+  const trimmed = model.trim();
+  return trimmed.length ? `Model: ${trimmed}` : null;
+};
+
 const ToolResult = ({ messageContent }: { messageContent: ToolResultContent }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  let lines: string[] = [];
-  
+  let rawOutput = "";
+
   if (messageContent.type !== "tool_result") return null;
   
   const toolUseId = messageContent.tool_use_id;
@@ -114,18 +134,23 @@ const ToolResult = ({ messageContent }: { messageContent: ToolResultContent }) =
   const isError = messageContent.is_error;
 
   if (messageContent.is_error) {
-    lines = [extractTagContent(String(messageContent.content), "tool_use_error") || String(messageContent.content)];
+    rawOutput = extractTagContent(String(messageContent.content), "tool_use_error") || String(messageContent.content);
   } else {
     try {
       if (Array.isArray(messageContent.content)) {
-        lines = messageContent.content.map((item: any) => item.text || "").join("\n").split("\n");
+        rawOutput = messageContent.content.map((item: any) => item.text || "").join("\n");
       } else {
-        lines = String(messageContent.content).split("\n");
+        rawOutput = String(messageContent.content);
       }
-    } catch { lines = [JSON.stringify(messageContent, null, 2)]; }
+    } catch {
+      rawOutput = JSON.stringify(messageContent, null, 2);
+    }
   }
 
-  const isMarkdownContent = isMarkdown(lines.join("\n"));
+  const formattedJson = tryFormatJsonContent(rawOutput);
+  const displayText = formattedJson ?? rawOutput;
+  const lines = displayText ? displayText.split("\n") : [];
+  const isMarkdownContent = !formattedJson && isMarkdown(rawOutput);
   useEffect(() => { setToolStatus(toolUseId, status); }, [toolUseId, status]);
 
   return (
@@ -149,18 +174,27 @@ const ToolResult = ({ messageContent }: { messageContent: ToolResultContent }) =
       )}
       {isExpanded && (
         <div className={`mt-3 text-sm whitespace-pre-wrap break-words ${isError ? "text-red-500" : "text-ink-700"}`}>
-          {isMarkdownContent ? <MDContent text={lines.join("\n")} /> : <pre>{lines.join("\n")}</pre>}
+          {isMarkdownContent ? (
+            <MDContent text={displayText} />
+          ) : (
+            <pre className="whitespace-pre-wrap break-words text-xs">{displayText}</pre>
+          )}
         </div>
       )}
     </div>
   );
 };
 
-const AssistantBlockCard = ({ title, text, showIndicator = false }: { title: string; text: string; showIndicator?: boolean }) => (
+const AssistantBlockCard = ({ title, text, showIndicator = false, badge }: { title: string; text: string; showIndicator?: boolean; badge?: string }) => (
   <div className="flex flex-col mt-4">
     <div className="header text-accent flex items-center gap-2">
       <StatusDot variant="success" isActive={showIndicator} isVisible={showIndicator} />
       {title}
+      {badge && (
+        <span className="rounded-full bg-surface-secondary px-3 py-0.5 text-xs font-medium text-ink-700">
+          {badge}
+        </span>
+      )}
     </div>
     <MDContent text={text} />
   </div>
@@ -337,12 +371,13 @@ export function MessageCard({
 
   if (sdkMessage.type === "assistant") {
     const contents = sdkMessage.message.content as MessageContent[];
+    const modelBadge = formatModelBadge((sdkMessage as any)?.model);
     const transcriptBlocks = (sdkMessage.message as any)?.transcript;
     if (Array.isArray(transcriptBlocks) && transcriptBlocks.length) {
       const transcriptText = transcriptBlocks.map((block: any) => block.text ?? "").join("\n\n");
       return (
         <>
-          <AssistantBlockCard title="Assistant" text={transcriptText} showIndicator={showIndicator} />
+          <AssistantBlockCard title="Assistant" text={transcriptText} showIndicator={showIndicator} badge={modelBadge ?? undefined} />
           {contents
             .filter((content) => content.type === "tool_use")
             .map((content, idx) =>
@@ -360,15 +395,21 @@ export function MessageCard({
         </>
       );
     }
+    let modelBadgeUsed = false;
     return (
       <>
         {contents.map((content: MessageContent, idx: number) => {
           const isLastContent = idx === contents.length - 1;
+          let badge: string | undefined;
+          if (!modelBadgeUsed && content.type === "text" && modelBadge) {
+            badge = modelBadge;
+            modelBadgeUsed = true;
+          }
           if (content.type === "thinking") {
             return <AssistantBlockCard key={idx} title="Thinking" text={content.thinking} showIndicator={isLastContent && showIndicator} />;
           }
           if (content.type === "text") {
-            return <AssistantBlockCard key={idx} title="Assistant" text={content.text} showIndicator={isLastContent && showIndicator} />;
+            return <AssistantBlockCard key={idx} title="Assistant" text={content.text} showIndicator={isLastContent && showIndicator} badge={badge} />;
           }
           if (content.type === "tool_use") {
             if (content.name === "AskUserQuestion") {
