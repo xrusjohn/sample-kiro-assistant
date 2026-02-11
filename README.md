@@ -114,7 +114,7 @@ This is a view of the SQLLite database. Every row represents a session.
 | Layer | Responsibilities | Key Files |
 | ----- | ---------------- | --------- |
 | **Electron Main** | Boots the BrowserWindow, exposes IPC APIs (`read-file`, `run-kiro-command`, MCP helpers), spawns `kiro-cli chat`, and copies uploads into per-session workspaces. | `src/electron/main.ts`, `src/electron/libs/runner.ts`, `src/electron/libs/mcp-config.ts`, `src/electron/libs/workspace.ts` |
-| **React Renderer** | Zustand store + UI components (sessions, prompt bar, MCP settings, file sidebar, file upload, slash commands). | `src/ui/*` |
+| **React Renderer** | Zustand store + UI components (sessions, prompt bar, MCP settings, file sidebar, file upload). | `src/ui/*` |
 | **Kiro CLI runtime** | Talks to Anthropic-compatible APIs, executes tools, runs MCP servers, and writes conversation history to its SQLite store. | `/Applications/Kiro CLI.app` or `kiro-cli` on PATH |
 | **Claude Agent SDK (helper)** | Only used for `generateSessionTitle()` to keep the automatic title suggestion feature. | `src/electron/libs/util.ts` |
 | **Persistence** | Assistant metadata/history via `sessions.db`; conversation bodies live in Kiro’s own `~/Library/Application Support/kiro-cli/data.sqlite3`. | `src/electron/libs/session-store.ts` |
@@ -228,7 +228,7 @@ Replace_with_your_key field.
 - During the first launch of the packaged DMG, Kiro Assistant automatically copies a **credential-free** template to `~/.kiro/agents/agent_config.json` so you start with the same MCP/server definitions shown above. You still need to fill in your own API keys for services like Composio or ZAI by editing that file later.
 - If you don't want the installer to touch an existing config (e.g., on a dev machine where you copy the app straight into `/Applications`), run `launchctl setenv KIRO_SKIP_AGENT_TEMPLATE 1` before opening the app (clear it with `launchctl unsetenv KIRO_SKIP_AGENT_TEMPLATE`). Only configure the file manually if the automatic setup doesn't occur.
 - Edit this file to add/remove MCPs. The Settings dialog simply toggles the `disabled` flag and shows summaries.
-- Skills are directories under `~/.kiro/skills`. Each folder is a skill and appears in the UI:
+- Skills are directories under `~/.kiro/skills`. Each folder is a skill and appears in the UI.
 - Adding skills is easy. You can add them by copying folders to the above mentioned parth, or you can add them using npx command and selecting Kiro option. They will show up in Settings dialogue.
 **npx skills add remotion-dev/skills`**
 
