@@ -1,13 +1,11 @@
 # Kiro Assistant - an infinitely resourceful agent to help with your daily life
 
-Kiro Assistant is a general purpose agent with capabilities similar to that of Manus AI and Anthropic Cowork.The idea behind Kiro Assistant is that it will help every member 
-of the society and not just software developers. 
+Kiro Assistant is a general purpose agent with 500+ capabilities.The idea behind Kiro Assistant is that it will help every member of the society and not just software developers. 
+It can work along side you as your coworker and help with your work across your business domains: Sales, Marketing, HR, Legal, FSI, Telco etc. All you have to add it is tools (MCPs) and skills. The system can load skills based on context. It can invoke appropriate tools based on context. That is what makes the system truly general purpose.
 
-Kiro Assistant is our customized build of the open-source Agent Cowork desktop application. We replace Claude Code CLI with our own Kiro-CLI. 
-It also takes advantage of Kiro-CLI features like SubAgent, MCPs, Skills etc.
+Kiro Assistant is our customized build of the open-source Agent Cowork desktop application. We replace Claude Code CLI with our own Kiro-CLI. It also takes advantage of Kiro-CLI features like Custom Agents, SubAgent, MCPs, Skills etc.
 
-We improve the UX and capabilities (**500 plus MCP tools & vast array of skills**). It can make audio, professional quality video, presentations, excel models, ppts
-and many more things. It can help you with emails, social media, cancelling unwanted subscriptions, filing expenses etc.
+We improve the UX and capabilities (**500 plus MCP tools & vast array of skills**) compared to Agent Cowork. It can make audio, professional quality video, presentations, excel models, ppts and many more things. It can help you with emails, social media, cancelling unwanted subscriptions, filing expenses etc.
 
 As mentioned, the original Agent Cowork build on top of Claude Code SDK and launches it with Claude Agents SDK. We do not have a Kiro SDK yet.
 So we develop a custom interface to the Kiro CLI through SQLLiteDatabase where Kiro-CLI stores convesation information.
@@ -115,7 +113,7 @@ This is a view of the SQLLite database. Every row represents a session.
 | ----- | ---------------- | --------- |
 | **Electron Main** | Boots the BrowserWindow, exposes IPC APIs (`read-file`, `run-kiro-command`, MCP helpers), spawns `kiro-cli chat`, and copies uploads into per-session workspaces. | `src/electron/main.ts`, `src/electron/libs/runner.ts`, `src/electron/libs/mcp-config.ts`, `src/electron/libs/workspace.ts` |
 | **React Renderer** | Zustand store + UI components (sessions, prompt bar, MCP settings, file sidebar, file upload). | `src/ui/*` |
-| **Kiro CLI runtime** | Talks to Anthropic-compatible APIs, executes tools, runs MCP servers, and writes conversation history to its SQLite store. | `/Applications/Kiro CLI.app` or `kiro-cli` on PATH |
+| **Kiro CLI runtime** | Talks to models on Amazon Bedrock securely using your Kiro Subscription, executes tools, runs MCP servers, and writes conversation history to its SQLite store. | `/Applications/Kiro CLI.app` or `kiro-cli` on PATH |
 | **Claude Agent SDK (helper)** | Only used for `generateSessionTitle()` to keep the automatic title suggestion feature. | `src/electron/libs/util.ts` |
 | **Persistence** | Assistant metadata/history via `sessions.db`; conversation bodies live in Kiro’s own `~/Library/Application Support/kiro-cli/data.sqlite3`. | `src/electron/libs/session-store.ts` |
 
@@ -127,7 +125,7 @@ More details (mermaid diagrams, SQLite polling strategy, security notes) live in
 
 ### Prerequisites
 
-1. **Kiro CLI** installed and authenticated for your provider (Anthropic, Bedrock, Kimi, etc.).
+1. **Kiro CLI** installed and authenticated.
 2. **Claude CLI (optional)** only if you want the legacy helpers (e.g., `/skills`) inside Settings.
 3. **Bun (preferred) or Node.js 18+** for building.
 4. **macOS 13+** (the current build targets macOS; Windows/Linux scripts are stubbed but untested).
