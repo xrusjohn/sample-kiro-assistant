@@ -140,14 +140,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   }, [open, fetchServers, fetchSkills, fetchModelSettings]);
 
   const handleToggleServer = useCallback(
-    async (name: string) => {
-      const current = servers[name];
-      if (!current) return;
-      const isEnabled = current.disabled !== true;
+    async (name: string, disabled: boolean) => {
+      if (!servers[name]) return;
       setUpdatingServer(name);
       setServerError(null);
       try {
-        const result = await window.electron.setKiroMcpDisabled({ name, disabled: isEnabled });
+        const result = await window.electron.setKiroMcpDisabled({ name, disabled });
         if (!result.success || !result.servers) {
           throw new Error(result.error || "Failed to update MCP server");
         }
@@ -198,11 +196,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           <section className="rounded-2xl border border-ink-900/10 bg-surface-secondary/70 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-ink-900">Default Model</h3>
-                <p className="text-xs text-muted">
-                  {modelSettings
-                    ? `Currently using ${modelSettings.currentModelId}`
-                    : "Loading current model..."}
+                <h3 className="text-sm font-semibold text-ink-900">Model Selection</h3>
+                <p className="mt-1 text-[11px] text-muted">
+                  Changes only apply to *new* tasks (each task creates a fresh workspace).
                 </p>
               </div>
               <button
@@ -217,9 +213,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               <div className="mt-3 rounded-lg border border-error/20 bg-error/5 px-3 py-2 text-xs text-error">{modelError}</div>
             )}
             <div className="mt-3">
-              <label className="text-xs font-medium text-muted" htmlFor="model-select">
-                Select model
-              </label>
               <select
                 id="model-select"
                 className="mt-1 w-full rounded-xl border border-ink-200 bg-surface px-3 py-2 text-sm text-ink-900 focus:border-accent focus:outline-none"
@@ -275,6 +268,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               <div>
                 <h3 className="text-sm font-semibold text-ink-900">Kiro MCP Servers</h3>
                 <p className="text-xs text-muted">Read from ~/.kiro/agents/agent_config.json</p>
+                <p className="text-[11px] text-muted mt-1">Changes only affect new tasks (fresh workspaces).</p>
               </div>
               <button
                 className="text-xs font-medium text-ink-500 hover:text-ink-900 disabled:opacity-50"
@@ -352,7 +346,7 @@ function ServerCard({
 }: {
   name: string;
   config: McpServersMap[string];
-  onToggle: (name: string) => void;
+  onToggle: (name: string, disabled: boolean) => void;
   updating: boolean;
 }) {
   const isEnabled = config?.disabled !== true;
@@ -376,23 +370,28 @@ function ServerCard({
           </div>
           <p className="text-xs text-muted break-all">{summary}</p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={isEnabled}
-          disabled={updating}
-          onClick={() => onToggle(name)}
-          className={`relative inline-flex h-6 w-12 shrink-0 items-center rounded-full transition-colors ${
-            isEnabled ? "bg-success" : "bg-ink-200"
-          } ${updating ? "opacity-50" : ""}`}
-        >
-          <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-surface transition-transform ${
-              isEnabled ? "translate-x-6" : "translate-x-1"
-            }`}
-          />
-          <span className="sr-only">Toggle {name}</span>
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={!isEnabled || updating}
+            onClick={() => onToggle(name, true)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${
+              isEnabled ? "border-error/40 text-error hover:bg-error/10" : "border-ink-900/20 text-muted"
+            } ${!isEnabled || updating ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            Disable
+          </button>
+          <button
+            type="button"
+            disabled={isEnabled || updating}
+            onClick={() => onToggle(name, false)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold border transition-colors ${
+              !isEnabled ? "border-success/40 text-success hover:bg-success/10" : "border-ink-900/20 text-muted"
+            } ${isEnabled || updating ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            Enable
+          </button>
+        </div>
       </div>
       {args && args.length > 0 && (
         <div className="mt-2 text-[12px] text-muted">

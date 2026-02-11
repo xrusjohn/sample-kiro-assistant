@@ -161,4 +161,9 @@ interface Window {
         getModelSettings: () => Promise<ModelSettingsResponse>;
         setDefaultModel: (payload: SetDefaultModelPayload) => Promise<SetDefaultModelResult>;
     }
+    playPromptStartCue?: () => void;
 }
+
+declare module "*.mp4";
+declare module "*.gif";
+declare module "*.mp3";

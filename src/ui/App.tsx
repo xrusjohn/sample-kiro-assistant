@@ -11,6 +11,10 @@ import { FileBar } from "./components/FileBar";
 import { FileSidebar } from "./components/FileSidebar";
 import MDContent from "./render/markdown";
 import { SettingsModal } from "./components/SettingsModal";
+import kiroVideo from "../../kiro.mp4";
+import promptStartSound from "./assets/on_it.mp3";
+import promptDoneSound from "./assets/done.mp3";
+import { PROMPT_SUBMIT_EVENT } from "./constants";
 
 function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -19,6 +23,13 @@ function App() {
   const [showPartialMessage, setShowPartialMessage] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [fileBarCollapsed, setFileBarCollapsed] = useState(false);
+  const prevFileBarStateRef = useRef<boolean | null>(null);
+  const fileBarCollapsedRef = useRef(fileBarCollapsed);
+  const spiritVideoRef = useRef<HTMLVideoElement | null>(null);
+  const startSoundRef = useRef<HTMLAudioElement | null>(null);
+  const doneSoundRef = useRef<HTMLAudioElement | null>(null);
+  const wasRunningRef = useRef(false);
+  const [spiritActive, setSpiritActive] = useState(false);
 
   const sessions = useAppStore((s) => s.sessions);
   const activeSessionId = useAppStore((s) => s.activeSessionId);
@@ -156,6 +167,69 @@ function App() {
   }, [connected, sendEvent]);
 
   useEffect(() => {
+    fileBarCollapsedRef.current = fileBarCollapsed;
+  }, [fileBarCollapsed]);
+
+  useEffect(() => {
+    if (showSettings) {
+      prevFileBarStateRef.current = fileBarCollapsedRef.current;
+      setFileBarCollapsed(true);
+    } else if (prevFileBarStateRef.current !== null) {
+      setFileBarCollapsed(prevFileBarStateRef.current);
+      prevFileBarStateRef.current = null;
+    }
+  }, [showSettings]);
+
+  useEffect(() => {
+    const startAudio = new Audio(promptStartSound);
+    const doneAudio = new Audio(promptDoneSound);
+    startSoundRef.current = startAudio;
+    doneSoundRef.current = doneAudio;
+    window.playPromptStartCue = () => {
+      if (!startAudio) return;
+      startAudio.currentTime = 0;
+      startAudio.play().catch(() => undefined);
+    };
+    return () => {
+      window.playPromptStartCue = undefined;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handlePromptSubmit = () => {
+      setSpiritActive(true);
+    };
+    window.addEventListener(PROMPT_SUBMIT_EVENT, handlePromptSubmit);
+    return () => window.removeEventListener(PROMPT_SUBMIT_EVENT, handlePromptSubmit);
+  }, []);
+
+  useEffect(() => {
+    if (isRunning) {
+      wasRunningRef.current = true;
+      setSpiritActive(true);
+    } else if (wasRunningRef.current) {
+      wasRunningRef.current = false;
+      setSpiritActive(false);
+      const doneSound = doneSoundRef.current;
+      if (doneSound) {
+        doneSound.currentTime = 0;
+        doneSound.play().catch(() => undefined);
+      }
+    }
+  }, [isRunning]);
+
+  useEffect(() => {
+    const video = spiritVideoRef.current;
+    if (!video) return;
+    if (spiritActive) {
+      video.currentTime = 0;
+      video.play().catch(() => undefined);
+    } else {
+      video.pause();
+    }
+  }, [spiritActive]);
+
+  useEffect(() => {
     if (!activeSessionId || !connected) return;
     const session = sessions[activeSessionId];
     if (session && !session.hydrated && !historyRequested.has(activeSessionId)) {
@@ -184,7 +258,19 @@ function App() {
   }, [activeSessionId, sendEvent, resolvePermissionRequest]);
 
   return (
-    <div className="flex h-screen bg-surface">
+    <div className="relative flex h-screen bg-surface">
+      {!showSettings && (
+        <video
+          ref={spiritVideoRef}
+          src={kiroVideo}
+          muted
+          loop
+          playsInline
+          className={`pointer-events-none absolute bottom-6 right-10 z-10 w-44 opacity-90 mix-blend-screen rounded-2xl shadow-lg ${
+            spiritActive ? "" : "grayscale opacity-70"
+          }`}
+        />
+      )}
       <Sidebar
         connected={connected}
         onNewSession={handleNewSession}

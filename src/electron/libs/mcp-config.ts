@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "fs/promises";
 import { dirname, join } from "path";
 import { homedir } from "os";
 import type { McpServersMap } from "../../shared/mcp.js";
@@ -18,6 +18,30 @@ const KIRO_AGENT_CONFIG_PATH = join(homedir(), ".kiro", "agents", "agent_config.
 
 export function getKiroMcpSettingsPath(): string {
   return KIRO_AGENT_CONFIG_PATH;
+}
+
+export async function ensureAgentConfigDefaults(templatePath: string): Promise<void> {
+  if (process.env.KIRO_SKIP_AGENT_TEMPLATE === "1") {
+    return;
+  }
+  try {
+    await readFile(KIRO_AGENT_CONFIG_PATH, "utf8");
+    return;
+  } catch (error: any) {
+    if (error?.code !== "ENOENT") {
+      console.warn("Failed to read existing agent_config.json:", error);
+      return;
+    }
+  }
+
+  try {
+    if (!templatePath) return;
+    await mkdir(dirname(KIRO_AGENT_CONFIG_PATH), { recursive: true });
+    await copyFile(templatePath, KIRO_AGENT_CONFIG_PATH);
+    console.info("Created default agent_config.json at", KIRO_AGENT_CONFIG_PATH);
+  } catch (error) {
+    console.warn("Failed to create default agent_config.json:", error);
+  }
 }
 
 async function readAgentConfig(): Promise<KiroAgentConfig> {

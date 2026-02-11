@@ -31,6 +31,15 @@ export function Sidebar({
     return list;
   }, [sessions]);
 
+  const openWorkingDirectory = (cwd?: string) => {
+    if (!cwd || !window.electron?.openFileExternal) return;
+    try {
+      void window.electron.openFileExternal(cwd);
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <aside className="fixed inset-y-0 left-0 flex h-full w-[280px] flex-col gap-4 border-r border-ink-900/20 bg-surface-secondary px-4 pb-4 pt-12">
       <div 
@@ -54,7 +63,13 @@ export function Sidebar({
             key={session.id}
             className={`cursor-pointer rounded-xl border px-2 py-3 text-left transition ${activeSessionId === session.id ? "border-accent/50 bg-accent-subtle/40" : "border-ink-900/15 bg-surface-tertiary/60 hover:bg-surface-tertiary"}`}
             onClick={() => setActiveSessionId(session.id)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveSessionId(session.id); } }}
+            onDoubleClick={() => openWorkingDirectory(session.cwd)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setActiveSessionId(session.id);
+              }
+            }}
             role="button"
             tabIndex={0}
           >

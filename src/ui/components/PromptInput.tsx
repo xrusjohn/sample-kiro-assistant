@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ClientEvent } from "../types";
 import { useAppStore } from "../store/useAppStore";
 import { useEffectiveCwd } from "../hooks/useEffectiveCwd";
+import { PROMPT_SUBMIT_EVENT } from "../constants";
 
 const DEFAULT_ALLOWED_TOOLS = "Read,Edit,Bash,Skill";
 const MAX_ROWS = 12;
@@ -68,6 +69,13 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void) {
       if (prompt.startsWith("/")) {
         await runSlashCommand(prompt);
         return;
+      }
+
+      window.playPromptStartCue?.();
+      try {
+        window.dispatchEvent(new CustomEvent(PROMPT_SUBMIT_EVENT));
+      } catch {
+        // ignore
       }
 
       if (!activeSessionId) {
@@ -199,6 +207,7 @@ export function PromptInput({ actions }: PromptInputProps) {
         <textarea
           rows={1}
           className="flex-1 resize-none bg-transparent py-1.5 text-sm text-ink-800 placeholder:text-muted focus:outline-none"
+          style={{ fontFamily: '"Calibri", "Söhne", ui-sans-serif, system-ui, -apple-system, sans-serif' }}
           placeholder="Describe what you want agent to handle..."
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}

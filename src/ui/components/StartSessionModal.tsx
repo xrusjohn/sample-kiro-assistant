@@ -35,6 +35,7 @@ export function StartSessionModal({
             <textarea
               rows={4}
               className="rounded-xl border border-ink-900/10 bg-surface-secondary p-3 text-sm text-ink-800 placeholder:text-muted-light focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/20 transition-colors resize-none"
+              style={{ fontFamily: '"Calibri", "Söhne", ui-sans-serif, system-ui, -apple-system, sans-serif' }}
               placeholder="Describe the task you want agent to handle..."
               value={prompt}
               onChange={(e) => onPromptChange(e.target.value)}

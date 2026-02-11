@@ -12,7 +12,7 @@ import { getStaticData, pollResources } from "./test.js";
 import { handleClientEvent, sessions } from "./ipc-handlers.js";
 import { generateSessionTitle, enhancedEnv, normalizeWorkingDirectory } from "./libs/util.js";
 import { resolveKiroCliBinary } from "./libs/kiro-cli.js";
-import { getKiroMcpSettingsPath, loadKiroMcpServers, setKiroMcpServerDisabled } from "./libs/mcp-config.js";
+import { getKiroMcpSettingsPath, loadKiroMcpServers, setKiroMcpServerDisabled, ensureAgentConfigDefaults } from "./libs/mcp-config.js";
 import { ensureWorkspaceRoot } from "./libs/workspace.js";
 import { loadSkills } from "./libs/skill-loader.js";
 import { loadAssistantSettings, saveAssistantSettings, getAssistantSettingsPath, type AssistantSettings } from "./libs/app-settings.js";
@@ -22,7 +22,11 @@ import "./libs/claude-settings.js";
 
 const execAsync = promisify(exec);
 let assistantSettings: AssistantSettings = {};
-app.on("ready", () => {
+app.on("ready", async () => {
+    const templatePath = app.isPackaged
+        ? join(process.resourcesPath, "agent_config.template.json")
+        : join(process.cwd(), "resources", "agent_config.template.json");
+    await ensureAgentConfigDefaults(templatePath);
     ensureWorkspaceRoot();
     assistantSettings = loadAssistantSettings();
     const mainWindow = new BrowserWindow({

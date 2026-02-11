@@ -41,7 +41,7 @@ export default function MDContent({ text }: { text: string }) {
         em: (props) => <em className="text-ink-800" {...props} />,
         pre: (props) => (
           <pre
-            className="mt-3 max-w-full overflow-x-auto whitespace-pre-wrap rounded-xl bg-surface-tertiary p-3 text-sm text-ink-700"
+            className="mt-3 max-w-full overflow-x-auto whitespace-pre-wrap rounded-xl border border-ink-900/20 bg-white p-3 text-sm text-ink-900"
             {...props}
           />
         ),
@@ -51,7 +51,7 @@ export default function MDContent({ text }: { text: string }) {
           const isInline = !match && !String(children).includes("\n");
 
           return isInline ? (
-            <code className="rounded bg-surface-tertiary px-1.5 py-0.5 text-accent font-mono text-base" {...rest}>
+            <code className="rounded bg-white px-1.5 py-0.5 text-ink-900 font-mono text-base" {...rest}>
               {children}
             </code>
           ) : (

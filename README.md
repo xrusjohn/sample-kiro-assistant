@@ -225,6 +225,8 @@ Replace_with_your_key field.
 }
 ```
 
+- During the first launch of the packaged DMG, Kiro Assistant automatically copies a **credential-free** template to `~/.kiro/agents/agent_config.json` so you start with the same MCP/server definitions shown above. You still need to fill in your own API keys for services like Composio or ZAI by editing that file later.
+- If you don't want the installer to touch an existing config (e.g., on a dev machine where you copy the app straight into `/Applications`), run `launchctl setenv KIRO_SKIP_AGENT_TEMPLATE 1` before opening the app (clear it with `launchctl unsetenv KIRO_SKIP_AGENT_TEMPLATE`). Only configure the file manually if the automatic setup doesn't occur.
 - Edit this file to add/remove MCPs. The Settings dialog simply toggles the `disabled` flag and shows summaries.
 - Skills are directories under `~/.kiro/skills`. Each folder is a skill and appears in the UI:
 - Adding skills is easy. You can add them by copying folders to the above mentioned parth, or you can add them using npx command and selecting Kiro option. They will show up in Settings dialogue.

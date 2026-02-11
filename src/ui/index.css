@@ -59,7 +59,7 @@ body,
 }
 
 body {
-  font-family: "Söhne", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: "Calibri", "Söhne", ui-sans-serif, system-ui, -apple-system, sans-serif;
   background-color: var(--color-surface);
   color: var(--color-ink-900);
   -webkit-font-smoothing: antialiased;
