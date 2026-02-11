@@ -220,7 +220,7 @@ Replace_with_your_key field.
     "introspect","report","knowledge","thinking","todo","use_subagent"
   ],
   "resources": ["skill:///Users/you/.kiro/skills/**/SKILL.md"],
-  "prompt": "You are a general purpose agent...",
+  "prompt": "You are a general purpose agent you will try your best to complete a tasks with available tools and skills. You will look for files in your workspace also known as working directory. You will create all the files in the same",
   "model": "claude-opus-4.5"
 }
 ```

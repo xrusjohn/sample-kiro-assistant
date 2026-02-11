@@ -1,16 +1,22 @@
 {
   "name": "Kiro Assistant",
-  "prompt": "You are Kiro Assistant, a persistent agent that can leverage MCP servers and local skills to complete end-to-end tasks.",
+  "prompt": "You are a general purpose agent you will try your best to complete a tasks with available tools and skills. You will look for files in your workspace also known as working directory. You will create all the files in the same",
   "model": "claude-opus-4.5",
   "mcpServers": {
     "pencil": {
       "command": "npx",
-      "args": ["--yes", "@pencilapp/pencil-mcp"],
+      "args": [
+        "--yes",
+        "@pencilapp/pencil-mcp"
+      ],
       "disabled": false
     },
     "composio": {
       "command": "npx",
-      "args": ["--yes", "@composiohq/mcp-server"],
+      "args": [
+        "--yes",
+        "@composiohq/mcp-server"
+      ],
       "env": {
         "COMPOSIO_API_KEY": ""
       },
@@ -18,12 +24,18 @@
     },
     "playwright": {
       "command": "npx",
-      "args": ["--yes", "@mendable/playwright-mcp"],
+      "args": [
+        "--yes",
+        "@mendable/playwright-mcp"
+      ],
       "disabled": false
     },
     "zai-mcp-server": {
       "command": "npx",
-      "args": ["--yes", "zai-mcp-server"],
+      "args": [
+        "--yes",
+        "zai-mcp-server"
+      ],
       "env": {
         "ZAI_API_KEY": ""
       },
@@ -31,7 +43,10 @@
     },
     "excel": {
       "command": "npx",
-      "args": ["--yes", "@negokaz/excel-mcp-server"],
+      "args": [
+        "--yes",
+        "@negokaz/excel-mcp-server"
+      ],
       "env": {
         "EXCEL_MCP_PAGING_CELLS_LIMIT": "4000"
       },
