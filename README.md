@@ -7,8 +7,7 @@ Kiro Assistant is our customized build of the open-source Agent Cowork desktop a
 
 We improve the UX and capabilities (**500 plus MCP tools & vast array of skills**) compared to Agent Cowork. It can make audio, professional quality video, presentations, excel models, ppts and many more things. It can help you with emails, social media, cancelling unwanted subscriptions, filing expenses etc.
 
-As mentioned, the original Agent Cowork build on top of Claude Code SDK and launches it with Claude Agents SDK. We do not have a Kiro SDK yet.
-So we develop a custom interface to the Kiro CLI through SQLLiteDatabase where Kiro-CLI stores convesation information.
+As mentioned, the original Agent Cowork build on top of Claude Code SDK and launches it with Claude Agents SDK. You can launch Kiro CLI from code and easily get the response back from the SQLLite database it maintains and updates in real time.
 
 To summarize:
 - 🚀 **Native Electron desktop app** Can help with tasks that you didn't know Kiro could help you with: make Audio, Video, Presentations, help you file expenses, cancel subscriptions and so on.
@@ -97,7 +96,7 @@ by the "bitter lesson".
 
 ![Kiro Assistant Principle](images/KiroCoworkPrinciple.png)
 
-Agent Cowork uses Cloud Code CLI which has a nice SDK called Claude Agents SDK. We don't have it with Kiro CLI. But we figured out a way by using SQLLiteDB maintained by Kiro CLI cleverly as shown in the diagram.
+Agent Cowork uses Cloud Code CLI which has a SDK called Claude Agents SDK. We can launch Kiro-cli directly from code and recieve responses (tool_use requests, responses) through real time SQLLite database it maintains.
 
 ![Agent Cowork vs Kiro Assistant](images/AgentCoworkvsKiroCoworker.png)
 
@@ -114,7 +113,6 @@ This is a view of the SQLLite database. Every row represents a session.
 | **Electron Main** | Boots the BrowserWindow, exposes IPC APIs (`read-file`, `run-kiro-command`, MCP helpers), spawns `kiro-cli chat`, and copies uploads into per-session workspaces. | `src/electron/main.ts`, `src/electron/libs/runner.ts`, `src/electron/libs/mcp-config.ts`, `src/electron/libs/workspace.ts` |
 | **React Renderer** | Zustand store + UI components (sessions, prompt bar, MCP settings, file sidebar, file upload). | `src/ui/*` |
 | **Kiro CLI runtime** | Talks to models on Amazon Bedrock securely using your Kiro Subscription, executes tools, runs MCP servers, and writes conversation history to its SQLite store. | `/Applications/Kiro CLI.app` or `kiro-cli` on PATH |
-| **Claude Agent SDK (helper)** | Only used for `generateSessionTitle()` to keep the automatic title suggestion feature. | `src/electron/libs/util.ts` |
 | **Persistence** | Assistant metadata/history via `sessions.db`; conversation bodies live in Kiro’s own `~/Library/Application Support/kiro-cli/data.sqlite3`. | `src/electron/libs/session-store.ts` |
 
 More details (mermaid diagrams, SQLite polling strategy, security notes) live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/INTEGRATION.md`](docs/INTEGRATION.md).
@@ -126,9 +124,8 @@ More details (mermaid diagrams, SQLite polling strategy, security notes) live in
 ### Prerequisites
 
 1. **Kiro CLI** installed and authenticated.
-2. **Claude CLI (optional)** only if you want the legacy helpers (e.g., `/skills`) inside Settings.
-3. **Bun (preferred) or Node.js 18+** for building.
-4. **macOS 13+** (the current build targets macOS; Windows/Linux scripts are stubbed but untested).
+2. **Bun (preferred) or Node.js 18+** for building.
+3. **macOS 13+** (the current build targets macOS; Windows/Linux scripts are stubbed but untested).
 
 > Each new session auto-creates a workspace under `~/Documents/workspace-kiro-assistant/<task-id>`. Use the Upload button to place files into that sandbox; the UI no longer asks you to pick folders manually.
 
@@ -316,16 +313,8 @@ It didn't just build great tables, it also built great meaningful visualizations
 1. Add voice interface
 2. Fix the issue with MCP Servers that need Web Socket connections (e.g. Pencil Desktop MCP). This issue is not there when using Claude Code CLI.
 3. Sanbox to working directory and select network addresses (Kiro CLI does not yet support Sandboxing)
-4. Integrate Kiro CLI with help of Kiro SDK once it is released, replacing current arrangement of getting Kiro-CLI responses through SQLLite database. It makes the application a bit slow.
+4. Integrate Kiro CLI with help of Kiro SDK once it is released (due soon), replacing current arrangement of getting Kiro-CLI responses through SQLLite database. 
 However, the worst impact is when the CLI tries to run a command that needs user response when running it with "execute_bash". It just keeps waiting and the UX is not updated, so user doesn't understand what is going on.
----
-
-## Recommednations for the Kiro team (Remove before open sourcing on Github)
-
-1. Allow Kiro-CLI to stream its output as JSON responses as Claude Code CLI does. This makes integration easy, even in absence of an official Kiro SDK.
-2. Deliver Kiro SDK no later than Feb 2026. Kiro CLI has potential to be used as general purpose agent, as well as, as a building block for enterprise applications. However, not having an official SDK makes it hard.
-3. Enable **token based billing** in Kiro CLI i.e. allow people to use their Bedrock keys so enterprise could use it as a building block for their agentic application.
-4. Enable **sandbox** feature in Kiro-CLI ASAP so its access on the local desktop can be limited.
 ---
 
 ## License
