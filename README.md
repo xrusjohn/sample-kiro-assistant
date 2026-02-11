@@ -18,7 +18,7 @@ To summarize:
 
 ---
 
-# Kiro Assistant is for everyone in the family
+# Kiro Assistant is for everyone in the family & every profession: engineers, lawyerers, financier and so on.
 
 We show that Kiro is not only for software developers, but every member of the society, for every member in your family (accessabilty features coming soon..)
 
