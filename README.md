@@ -325,9 +325,9 @@ The project started with this base https://github.com/DevAgentForge/Claude-Cowor
 
 ## Comments on security
 
-It runs on local machine, and accesses files from working directories. It access models on Bedrock through Kiro-CLI. It is no different from using Kiro-CLI. It calls external APIs with users’ own account (OAuth). These are the services that users already trust. There is a proper login flow that helps user log in into services like ElevanLabs, HeyGen, Gmail etc.
+It runs on local machine, and accesses files from working directories. It access models on Bedrock through Kiro-CLI. It is no different from using Kiro-CLI. It calls external APIs with users’ own account (OAuth). These are the services that users already trust. There is a proper login flow that helps user log in into services like ElevanLabs, HeyGen, Gmail etc. Use Composio Search tool and SaaS services it avails, if you trust them. We DO NOT assume responsibility for any loss arising out of use of this prototype.
+
 Local MCPs like excel, playwright don’t need credentials. We also use ZAI MCPs for dealing with PDFs, Images etc. It gets automatically used if the model being used is not multimodal. User can remove any of the MCPs they don’t prefer.
 
-Typical advisory applicable for any GenAI service applies to this one.
+**Typical advisory applicable for any GenAI service applies to this one.**
 
-**Remember this is not a production ready project for your sensitive data!**
