@@ -30,7 +30,7 @@ We show that Kiro is not only for software developers, but every member of the s
 
 Kiro Assistant has 500+ tools through Composio (ElevanLab for audio, HeyGen for video, Gmail, X tools etc.). 
 
-It can also use local MCPs for Excel and other development environments like Blender, Pencil Desktop etc. As long as you haev an MCP, it will figure out how to use it opportunistically.
+It can also use local MCPs for Excel and other development environments like Blender, Pencil Desktop etc. As long as you have an MCP, it will figure out how to use it opportunistically.
 We have added **playwright** MCP to allow it ability to handle browsers.
 We have added **ZAI MCPs** to give it ability to deal with PDFs, Images etc. when the model being used is not multimodal.
 
@@ -45,7 +45,7 @@ Even we don't know what it is fully capable of. Please give it a shot!
 
 ## Deceptively simple interface
 
-Task: Make me an audio podcast of 3 minutes on moltbot controvery. I want to upload it to youtube, so create a display image and combine it with mp3 to give me an MP4.
+Task: Make me an audio podcast of 3 minutes on Moltbot controversy. I want to upload it to youtube, so create a display image and combine it with mp3 to give me an MP4.
 
 ![Kiro Assistant UX](images/KiroCowork.png)
 
@@ -83,7 +83,7 @@ by the "bitter lesson".
 
 ![Kiro Assistant Principle](images/KiroCoworkPrinciple.png)
 
-Agent Cowork uses Cloud Code CLI which has a SDK called Claude Agents SDK. We can launch Kiro-cli directly from code and recieve responses (tool_use requests, responses) through real time SQLLite database it maintains.
+Agent Cowork uses Claude Code CLI which has a SDK called Claude Agents SDK. We can launch Kiro-cli directly from code and receive responses (tool_use requests, responses) through real time SQLite database it maintains.
 
 ![Agent Cowork vs Kiro Assistant](images/AgentCoworkvsKiroCoworker.png)
 
@@ -91,7 +91,7 @@ This is a technical diagram of various components involved.
 
 ![Kiro Assistant Architecture](images/architecture.png)
 
-This is a view of the SQLLite database. Every row represents a session.
+This is a view of the SQLite database. Every row represents a session.
 
 ![SQLite Polling Flow](images/SQLLite.png)
 
@@ -119,9 +119,9 @@ More details (mermaid diagrams, SQLite polling strategy, security notes) live in
 ### Steps
 
 ```bash
-# Clone from AWS GitLab
-git clone https://gitlab.aws.dev/wwps-asean-sa-genai/Kiro-Cowork.git
-cd Kiro-Cowork
+# Clone from AWS Samples Github
+git clone https://github.com/aws-samples/sample-kiro-assistant.git
+cd sample-kiro-assistant
 
 # Install dependencies
 bun install
@@ -211,8 +211,8 @@ Replace_with_your_key field.
 - If you don't want the installer to touch an existing config (e.g., on a dev machine where you copy the app straight into `/Applications`), run `launchctl setenv KIRO_SKIP_AGENT_TEMPLATE 1` before opening the app (clear it with `launchctl unsetenv KIRO_SKIP_AGENT_TEMPLATE`). Only configure the file manually if the automatic setup doesn't occur.
 - Edit this file to add/remove MCPs. The Settings dialog simply toggles the `disabled` flag and shows summaries.
 - Skills are directories under `~/.kiro/skills`. Each folder is a skill and appears in the UI.
-- Adding skills is easy. You can add them by copying folders to the above mentioned parth, or you can add them using npx command and selecting Kiro option. They will show up in Settings dialogue.
-**npx skills add remotion-dev/skills`**
+- Adding skills is easy. You can add them by copying folders to the above mentioned path, or you can add them using npx command and selecting Kiro option. They will show up in Settings dialogue.
+**`npx skills add remotion-dev/skills`**
 
 ![Settings showing MCPs and Skills](images/settings.png)
 
@@ -254,7 +254,7 @@ It has many skills for PPTs, Excel, Videos etc. Here is a simple promotional vid
 You can give it article that you don't have time to read. It can convert them to audio podcasts.
 
 You can even ask it do research for you and make the output into podcasts so you can listen while doing mundane activities.
-For example, here it is making a podcast for me on Moltbot controversy. It 1/ did the research, 2/ wrote a script, 3/ produced audio using ElevanLabs (MP3), 
+For example, here it is making a podcast for me on Moltbot controversy. It 1/ did the research, 2/ wrote a script, 3/ produced audio using ElevenLabs (MP3), 
 4/ produced a poster, 5/ stitched together the poster and MP3 to produce MP4 using FFMPEG. 
 
 Just listen and remember this is all being orchestrated autonomously by Kiro-CLI. I did not have to do anything.
@@ -299,7 +299,7 @@ It didn't just build great tables, it also built great meaningful visualizations
 
 1. Add voice interface
 2. Sanbox to working directory and select network addresses (Kiro CLI does not yet support Sandboxing)
-3. Integrate Kiro CLI with help of Kiro SDK once it is released (due soon), replacing current arrangement of getting Kiro-CLI responses through SQLLite database. 
+3. Integrate Kiro CLI with help of Kiro SDK once it is released (due soon), replacing current arrangement of getting Kiro-CLI responses through SQLite database. 
 ---
 
 ## License
