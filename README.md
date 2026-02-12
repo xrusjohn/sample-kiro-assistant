@@ -104,8 +104,6 @@ Agent Cowork - which inspired this project - uses Claude Code CLI which has a SD
 
 This is a technical diagram of various components involved.
 
-![SQLite Polling Flow](images/SQLLite.png)
-
 | Layer | Responsibilities | Key Files |
 | ----- | ---------------- | --------- |
 | **Electron Main** | Boots the BrowserWindow, exposes IPC APIs (`read-file`, `run-kiro-command`, MCP helpers), spawns `kiro-cli chat`, and copies uploads into per-session workspaces. | `src/electron/main.ts`, `src/electron/libs/runner.ts`, `src/electron/libs/mcp-config.ts`, `src/electron/libs/workspace.ts` |
