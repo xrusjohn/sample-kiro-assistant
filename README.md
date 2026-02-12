@@ -332,7 +332,7 @@ It got this data from reputable sources.
 
 ## License
 
-The project started with this base https://github.com/DevAgentForge/Claude-Cowork which is under MIT. This project is also released under MIT. Kiro-CLI is an Amazon Web Services product (all right reserved).
+The project started with this base [Agent Cowork](https://github.com/DevAgentForge/Claude-Cowork) which is under MIT license. This project is also released under MIT. Kiro-CLI that provides Kiro Agent for this project is an Amazon Web Services product (all right reserved).
 
 ---
 
