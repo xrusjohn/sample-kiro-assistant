@@ -325,7 +325,9 @@ It got this data from reputable sources.
 
 1. Add voice interface
 2. Add support for MCP for Apps for interactive applications with this desktop interface.
-3. Integrate Kiro CLI with help of Kiro SDK once it is released (due soon), replacing current arrangement of getting Kiro-CLI responses through SQLite database. 
+3. Integrate Kiro CLI with help of Kiro SDK once it is released (due soon), replacing current arrangement of getting Kiro-CLI responses through SQLite database.
+4. Social connections - slack, Whatsapp, Telegram, iMessage
+5. 24*7 running agents in the cloud - designed for cost effectiveness and security.
 ---
 
 ## License
