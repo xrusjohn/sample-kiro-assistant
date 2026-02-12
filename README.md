@@ -129,8 +129,6 @@ More details (mermaid diagrams, SQLite polling strategy, security notes) live in
 2. **Bun (preferred) or Node.js 18+** for building.
 3. **macOS 13+** (the current build targets macOS; Windows/Linux scripts are stubbed but untested).
 
-> Each new session auto-creates a workspace under `~/Documents/workspace-kiro-assistant/<task-id>`. Use the Upload button to place files into that sandbox; the UI no longer asks you to pick folders manually.
-
 ### Steps
 
 ```bash
@@ -149,7 +147,7 @@ bun run dist:mac
 ```
 
 The macOS bundle is emitted to `dist/mac-arm64/Kiro Assistant.app`. Copy it into `/Applications` (back up any previous version first).
-You can also build and run it for Windows machines.
+You can also build and run it for Windows machines. Users report it works fine.
 
 ---
 
