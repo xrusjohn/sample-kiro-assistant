@@ -289,10 +289,22 @@ If you want a beautiful poster, creative etc. it can use Pencil MCP and create w
 
 ![Pencil Desktop](images/Pencil_Desktop.png)
 
-### Excel Modelling Example
+### Research and Excel Modelling Example
 
-Antrhopic announced Claude for Excel. We tried capability of Kiro Assistant to do research and build excel models, it exceeded our expectations.
-Below are screenshot of the excel model it built to show impact of AI bool on MAG7 stocks and Saas stocks.
+Here we asked Kiro-Assistant to study impact of AI boom on stocks on MAG7 companies and prominent SaaS stocks.
+It got this data from reputable sources.
+
+![Excel Modelling Step 1](images/excel1.png)
+
+It didn't just build great tables, it also built great meaningful visualizations.
+
+![Excel Modelling Step 2](images/excel2.png)
+
+---
+
+### Research & Power point presentation.
+
+We asked Kiro-Assitant to study architecture of WAN and SeeDance 1 video models and create a presentation to compare and contrast them.
 
 It got this data from reputable sources.
 
