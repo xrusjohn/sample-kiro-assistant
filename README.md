@@ -59,11 +59,11 @@ Task: Make me an audio podcast of 3 minutes on Moltbot controversy. I want to up
 
 Task: Can you please review architectures of WAN and SeeDance video models and compare them in a ppt. Add diagrams, screenshots etc. to make your points.
 
-![Kiro Assistant UX](images/KiroCowork1.png)
+![Kiro Assistant1 UX](images/KiroCowork1.png)
 
 ---
 
-If a model works in `kiro-cli`, it works in Kiro Assistant. So for example, MiniMax M2 can be selected in Kiro CLI, so it will work with Kiro Assistant.
+If a model works in `kiro-cli`, it works in Kiro Assistant. So for example, if MiniMax M2 can be selected in Kiro CLI, it will work with Kiro Assistant.
 Kiro Assistant always uses the model stored in `~/Library/Application Support/kiro-assistant/assistant-settings.json` (managed through the Settings → Default Model dropdown). If you haven’t picked one yet, it falls back to `claude-opus-4.5`. Every prompt launches a fresh `kiro-cli` process using whatever model is currently selected, so changing the dropdown takes effect on the very next run. **Current limitation:** because the conversation metadata is cached by `kiro-cli`, mid-task changes are only picked up after starting a *new task* (which creates a new working directory). If you switch models midway through an existing task, that session will continue using the originally selected model until you spin up another task.
 
 Available models today:
@@ -75,6 +75,8 @@ Available models today:
 - `claude-sonnet-4.5-1m`
 - `claude-sonnet-4`
 - `claude-haiku-4.5`
+
+Soon to be available (stay tuned)
 - `deepseek-3.2`
 - `kimi-k2.5`
 - `minimax-m2.1`
@@ -82,7 +84,10 @@ Available models today:
 - `glm-4.7-flash`
 - `qwen3-coder-next`
 
-We highly encourage you to start contributing to the project. Kiro-CLI (which wraps Kiro Agents) is awesome. Let us have fun with it
+We highly encourage you to start contributing to the project. 
+Kiro-CLI (which wraps Kiro Agents) is awesome. Let us have fun with it.
+
+With new OSS models that will become available soon, you will be able to use Kiro-Assistant as a general AI agent for vast number of tasks every month with your Kiro subscription.
 
 ---
 
@@ -328,5 +333,3 @@ Typical advisory applicable for any GenAI service applies to this one.
 **Remember this is not a production ready project for your sensitive data!**
 
 **Remember this is not a reference architecture, but a prototype.**
-
-If a model works in `kiro-cli`, it works in Kiro Assistant. So for example, MiniMax M2 can be selected in Kiro CLI, so it will work with Kiro Assistant.
