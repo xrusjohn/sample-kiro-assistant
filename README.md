@@ -1,17 +1,11 @@
 # Kiro Assistant - an infinitely resourceful agent to help as a coworker and as a assistant
 
-Kiro Assistant is a general purpose agent with 500+ capabilities.The idea behind Kiro Assistant is that it will help every member of the society and not just software developers. 
+Kiro Assistant is a general purpose agent with **500+ capabilities & vast array of skills**.The idea behind Kiro Assistant is that it will help every member of the society and not just software developers. 
 It can work along side you as your coworker and help with your work across your business domains: Sales, Marketing, HR, Legal, FSI, Telco etc. All you have to add it is tools (MCPs) and skills. The system can load skills based on context. It can invoke appropriate tools based on context. That is what makes the system truly general purpose.
-
-Kiro Assistant is our customized build of the open-source Agent Cowork desktop application. We replace Claude Code CLI with our own Kiro-CLI. It also takes advantage of Kiro-CLI features like Custom Agents, SubAgent, MCPs, Skills etc.
-
-We improve the UX and capabilities (**500 plus MCP tools & vast array of skills**) compared to Agent Cowork. It can make audio, professional quality video, presentations, excel models, ppts and many more things. It can help you with emails, social media, cancelling unwanted subscriptions, filing expenses etc.
-
-As mentioned, the original Agent Cowork build on top of Claude Code SDK and launches it with Claude Agents SDK. You can launch Kiro CLI from code and easily get the response back from the SQLLite database it maintains and updates in real time.
 
 To summarize:
 - 🚀 **Native Electron desktop app** Can help with tasks that you didn't know Kiro could help you with: make Audio, Video, Presentations, help you file expenses, cancel subscriptions and so on.
-- 🧠 **Powered entirely by `kiro-cli`** (no Claude CLI required) with Kiro look and feel
+- 🧠 **Powered entirely by `kiro-cli`** 
 - 🧩 **500 MCPs through Composio. Additional MCPs for Excel, Pencil Desktop etc** surfaced inside Settings
 - 📂 **Auto-provisioned workspaces** per session under `~/Documents/workspace-kiro-assistant/<task-id>`
 - 💾 **SQLite-backed history** so conversations stream in real time and persist across launches
@@ -103,7 +97,7 @@ by the "bitter lesson".
 
 ![Kiro Assistant Principle](images/KiroCoworkPrinciple.png)
 
-Agent Cowork uses Claude Code CLI which has a SDK called Claude Agents SDK. We can launch Kiro-cli directly from code and receive responses (tool_use requests, responses) through real time SQLite database it maintains.
+Agent Cowork - which inspired this project - uses Claude Code CLI which has a SDK called Claude Agents SDK. We can launch Kiro-cli directly from code and receive responses (tool_use requests, responses) through real time SQLite database it maintains.
 
 ![Agent Cowork vs Kiro Assistant](images/AgentCoworkvsKiroCoworker.png)
 
@@ -288,6 +282,12 @@ You may need to give feedback sometimes (off-coures).
     <img src="https://img.youtube.com/vi/468Kns96eLA/0.jpg" alt="Video podcast creation" width="100%">
   </a>
 
+
+### Designing creatives with Pencil Desktop
+
+If you want a beautiful poster, creative etc. it can use Pencil MCP and create well thought out creatives for you.
+
+![Pencil Desktop](images/Pencil_Desktop.png)
 
 ### Excel Modelling Example
 
