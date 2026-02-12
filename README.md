@@ -18,11 +18,19 @@ To summarize:
 
 ---
 
-# Kiro Assistant is for everyone in the family & every profession: engineers, lawyerers, financier and so on.
+# Kiro Assistant is for everyone in the family & every profession
 
-We show that Kiro is not only for software developers, but every member of the society, for every member in your family (accessabilty features coming soon..)
+We show that Kiro is not only for software developers, but every member of the society, for every member in your family (accessabilty features like voice coming soon..)
 
 ![Kiro Assistant Concept](images/KiroCoworkConcept.png)
+
+---
+
+# Kiro Assistant can be customized with Kiro Powers - collection of tools and skills
+
+With Kiro Powers, Kiro is useful to vast array of professionals. Just define skills and tools. Skills are plane .md files that are loaded depending on context. They describe how to do specific things (e.g. creating powerpoint as per your style, building spreadsheets as per your preferrence). Tools give access to Kiro to various softwares and SaaS products on your behalf.
+
+![Kiro Power Concept](images/Kiro_Powers_for_Professionals.png)
 
 ---
 
