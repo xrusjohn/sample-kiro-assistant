@@ -308,8 +308,7 @@ We asked Kiro-Assitant to study architecture of WAN and SeeDance 1 video models 
 
 It got this data from reputable sources.
 
-![Power Point](images/kiro_ppt.png)
-
+![Power Point](images/Kiro_ppt.png)
 
 ---
 
