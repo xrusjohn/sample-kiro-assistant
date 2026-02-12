@@ -104,10 +104,6 @@ Agent Cowork - which inspired this project - uses Claude Code CLI which has a SD
 
 This is a technical diagram of various components involved.
 
-![Kiro Assistant Architecture](images/architecture.png)
-
-This is a view of the SQLite database. Every row represents a session.
-
 ![SQLite Polling Flow](images/SQLLite.png)
 
 | Layer | Responsibilities | Key Files |
