@@ -1,4 +1,4 @@
-# Kiro Assistant - an infinitely resourceful agent to help as a coworker and as a assistant
+# Kiro Assistant - an infinitely resourceful agent to help as a coworker and as a personal assistant
 
 Kiro Assistant is a general purpose agent with **500+ capabilities & vast array of skills**.The idea behind Kiro Assistant is that it will help every member of the society and not just software developers. 
 It can work along side you as your coworker and help with your work across your business domains: Sales, Marketing, HR, Legal, FSI, Telco etc. All you have to add it is tools (MCPs) and skills. The system can load skills based on context. It can invoke appropriate tools based on context. That is what makes the system truly general purpose.
@@ -253,15 +253,6 @@ Replace_with_your_key field.
 5. Social media management
 6. Daily tasks (emails, scheduling)
 
-### Product Video Creation Example (click on the image)
-
-It has many skills for PPTs, Excel, Videos etc. Here is a simple promotional video it made using Remotion-Best-Practices skill.
-
-  <a href="https://www.youtube.com/watch?v=s46r3NS1V38">
-    <img src="https://img.youtube.com/vi/s46r3NS1V38/0.jpg" alt="Kiro announcement" width="100%">
-  </a>
-
-
 ### Converting articles to audio and video podcasts, great for making training videos (click on the image)
 You can give it article that you don't have time to read. It can convert them to audio podcasts.
 
@@ -282,7 +273,6 @@ You may need to give feedback sometimes (off-coures).
   <a href="https://www.youtube.com/watch?v=468Kns96eLA">
     <img src="https://img.youtube.com/vi/468Kns96eLA/0.jpg" alt="Video podcast creation" width="100%">
   </a>
-
 
 ### Designing creatives with Pencil Desktop
 
@@ -312,6 +302,16 @@ It got this data from reputable sources.
 ![Power Point](images/Kiro_ppt.png)
 
 ---
+
+### Product Video Creation Example (click on the image)
+
+It has many skills for PPTs, Excel, Videos etc. Here is a simple promotional video it made using Remotion-Best-Practices skill.
+
+  <a href="https://www.youtube.com/watch?v=s46r3NS1V38">
+    <img src="https://img.youtube.com/vi/s46r3NS1V38/0.jpg" alt="Kiro announcement" width="100%">
+  </a>
+
+  ---
 
 ## Contributing
 
