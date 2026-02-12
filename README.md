@@ -57,6 +57,7 @@ Task: Make me an audio podcast of 3 minutes on Moltbot controversy. I want to up
 ![Kiro Assistant UX](images/KiroCowork.png)
 
 Task: Can you please review architectures of WAN and SeeDance video models and compare them in a ppt. Add diagrams, screenshots etc. to make your points.
+**we added a small animation of Kiro mascot working while the tasks are ongoing to keep you entertained!**
 
 ![Kiro Assistant2 UX](images/KiroCowork2.png)
 
@@ -302,7 +303,7 @@ It didn't just build great tables, it also built great meaningful visualizations
 
 ---
 
-### Research & Power point presentation.
+### Research & Power point presentations
 
 We asked Kiro-Assitant to study architecture of WAN and SeeDance 1 video models and create a presentation to compare and contrast them.
 
