@@ -143,6 +143,17 @@ bun run dist:mac
 The macOS bundle is emitted to `dist/mac-arm64/Kiro Assistant.app`. Copy it into `/Applications` (back up any previous version first).
 You can also build and run it for Windows machines. Users report it works fine.
 
+```bash
+# remove old application
+sudo rm -rf "/Applications/Kiro Assistant.app"
+
+# copy the new application to MAC applications
+sudo ditto "dist/mac-arm64/Kiro Assistant.app" "/Applications/Kiro Assistant.app"
+
+# You can directly run from command line
+open -a "Kiro Assistant"
+```
+
 ---
 
 ## Custom Agent Configuration & MCPs
