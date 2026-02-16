@@ -96,6 +96,8 @@ type KiroCommandResult = {
 }
 
 type SkillInfo = import("./src/shared/skills").SkillInfo;
+type ClientEvent = import("./src/ui/types").ClientEvent;
+type ServerEvent = import("./src/ui/types").ServerEvent;
 
 type SkillsResponse = {
     success: boolean;
@@ -142,8 +144,8 @@ interface Window {
         subscribeStatistics: (callback: (statistics: Statistics) => void) => UnsubscribeFunction;
         getStaticData: () => Promise<StaticData>;
         // Claude Agent IPC APIs
-        sendClientEvent: (event: any) => void;
-        onServerEvent: (callback: (event: any) => void) => UnsubscribeFunction;
+        sendClientEvent: (event: ClientEvent) => void;
+        onServerEvent: (callback: (event: ServerEvent) => void) => UnsubscribeFunction;
         generateSessionTitle: (userInput: string | null) => Promise<string>;
         getRecentCwds: (limit?: number) => Promise<string[]>;
         selectDirectory: () => Promise<string | null>;

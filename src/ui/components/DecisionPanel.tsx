@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { AgentPermissionResult } from "../../shared/agent-schema.js";
 import type { PermissionRequest } from "../store/useAppStore";
 
@@ -23,11 +23,6 @@ export function DecisionPanel({
   const questions = input?.questions ?? [];
   const [selectedOptions, setSelectedOptions] = useState<Record<number, string[]>>({});
   const [otherInputs, setOtherInputs] = useState<Record<number, string>>({});
-
-  useEffect(() => {
-    setSelectedOptions({});
-    setOtherInputs({});
-  }, [request.toolUseId]);
 
   const toggleOption = (qIndex: number, optionLabel: string, multiSelect?: boolean) => {
     setSelectedOptions((prev) => {

@@ -2,19 +2,37 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentPermissionResult } from "../shared/agent-schema.js";
 import { useIPC } from "./hooks/useIPC";
 import { useAppStore } from "./store/useAppStore";
-import type { ServerEvent, CreatedFile } from "./types";
+import type { PermissionRequest } from "./store/useAppStore";
+import type { ServerEvent, CreatedFile, StreamMessage } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { StartSessionModal } from "./components/StartSessionModal";
-import { PromptInput, usePromptActions } from "./components/PromptInput";
+import { PromptInput } from "./components/PromptInput";
 import { MessageCard } from "./components/EventCard";
 import { FileBar } from "./components/FileBar";
 import { FileSidebar } from "./components/FileSidebar";
 import MDContent from "./render/markdown";
 import { SettingsModal } from "./components/SettingsModal";
+import { usePromptActions } from "./hooks/usePromptActions";
 import kiroVideo from "../../kiro.mp4";
 import promptStartSound from "./assets/on_it.mp3";
 import promptDoneSound from "./assets/done.mp3";
 import { PROMPT_SUBMIT_EVENT } from "./constants";
+
+const EMPTY_MESSAGES: StreamMessage[] = [];
+const EMPTY_PERMISSION_REQUESTS: PermissionRequest[] = [];
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getPartialMessageContent = (streamEvent: unknown): string => {
+  if (!isRecord(streamEvent) || !isRecord(streamEvent.delta)) return "";
+  const deltaType = typeof streamEvent.delta.type === "string" ? streamEvent.delta.type : "";
+  const realType = deltaType.split("_")[0];
+  const payload = streamEvent.delta[realType];
+  if (typeof payload === "string") return payload;
+  if (isRecord(payload) && typeof payload.text === "string") return payload.text;
+  return "";
+};
 
 function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -63,35 +81,26 @@ function App() {
   const fileLoading = useAppStore((s) => s.fileLoading);
   const setFileLoading = useAppStore((s) => s.setFileLoading);
 
-  // Helper function to extract partial message content
-  const getPartialMessageContent = (eventMessage: any) => {
-    try {
-      const realType = eventMessage.delta.type.split("_")[0];
-      return eventMessage.delta[realType];
-    } catch (error) {
-      console.error(error);
-      return "";
-    }
-  };
-
   // Handle partial messages from stream events
   const handlePartialMessages = useCallback((partialEvent: ServerEvent) => {
     if (partialEvent.type !== "stream.message" || partialEvent.payload.message.type !== "stream_event") return;
 
-    const message = partialEvent.payload.message as any;
-    if (message.event.type === "content_block_start") {
+    const streamEvent = partialEvent.payload.message.event;
+    const eventType = isRecord(streamEvent) && typeof streamEvent.type === "string" ? streamEvent.type : "";
+
+    if (eventType === "content_block_start") {
       partialMessageRef.current = "";
       setPartialMessage(partialMessageRef.current);
       setShowPartialMessage(true);
     }
 
-    if (message.event.type === "content_block_delta") {
-      partialMessageRef.current += getPartialMessageContent(message.event) || "";
+    if (eventType === "content_block_delta") {
+      partialMessageRef.current += getPartialMessageContent(streamEvent);
       setPartialMessage(partialMessageRef.current);
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
 
-    if (message.event.type === "content_block_stop") {
+    if (eventType === "content_block_stop") {
       setShowPartialMessage(false);
       setTimeout(() => {
         partialMessageRef.current = "";
@@ -110,8 +119,8 @@ function App() {
   const promptActions = usePromptActions(sendEvent);
 
   const activeSession = activeSessionId ? sessions[activeSessionId] : undefined;
-  const messages = activeSession?.messages ?? [];
-  const permissionRequests = activeSession?.permissionRequests ?? [];
+  const messages = activeSession?.messages ?? EMPTY_MESSAGES;
+  const permissionRequests = activeSession?.permissionRequests ?? EMPTY_PERMISSION_REQUESTS;
   const isRunning = activeSession?.status === "running";
   const sessionFiles = activeSession?.createdFiles ?? [];
   const createdFiles = sessionFiles.filter((file) => file.kind === "created");

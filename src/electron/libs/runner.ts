@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import type { ServerEvent, StreamMessage } from "../types.js";
+import type { AgentMessage } from "../../shared/agent-schema.js";
 import type { Session } from "./session-store.js";
 import { enhancedEnv, normalizeWorkingDirectory } from "./util.js";
 import { resolveKiroCliBinary } from "./kiro-cli.js";
@@ -86,31 +86,36 @@ export async function runClaude(options: RunnerOptions): Promise<RunnerHandle> {
     args.push(prompt);
   }
 
+  const createModelSelectionMessage = (): AgentMessage => {
+    const message = {
+      type: "system",
+      message: {
+        id: crypto.randomUUID(),
+        role: "system",
+        content: [
+          {
+            type: "text",
+            text: `**Model:** ${model || "unknown"}`
+          }
+        ]
+      },
+      subtype: "meta",
+      model,
+      session_id: session.id,
+      uuid: crypto.randomUUID(),
+      session_id_display: session.id,
+      permissionMode: interactive ? "interactive" : "non-interactive",
+      cwd: normalizedCwd
+    };
+    return message as unknown as AgentMessage;
+  };
+
   const emitModelSelection = () => {
     onEvent({
       type: "stream.message",
       payload: {
         sessionId: session.id,
-        message: {
-          type: "system",
-          message: {
-            id: crypto.randomUUID(),
-            role: "system",
-            content: [
-              {
-                type: "text",
-                text: `**Model:** ${model || "unknown"}`
-              }
-            ]
-          } as any,
-          subtype: "meta",
-          model,
-          session_id: session.id,
-          uuid: crypto.randomUUID() as any,
-          session_id_display: session.id,
-          permissionMode: interactive ? "interactive" : "non-interactive",
-          cwd: normalizedCwd
-        } as any
+        message: createModelSelectionMessage()
       }
     });
   };
@@ -189,7 +194,7 @@ export async function runClaude(options: RunnerOptions): Promise<RunnerHandle> {
     }
   }, 750);
 
-  child.on("close", (code, signal) => {
+  child.on("close", (code) => {
     if (closed) return;
     closed = true;
     if (pollTimer) {

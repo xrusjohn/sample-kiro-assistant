@@ -27,8 +27,8 @@ export async function ensureAgentConfigDefaults(templatePath: string): Promise<v
   try {
     await readFile(KIRO_AGENT_CONFIG_PATH, "utf8");
     return;
-  } catch (error: any) {
-    if (error?.code !== "ENOENT") {
+  } catch (error: unknown) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
       console.warn("Failed to read existing agent_config.json:", error);
       return;
     }
@@ -48,8 +48,8 @@ async function readAgentConfig(): Promise<KiroAgentConfig> {
   try {
     const raw = await readFile(KIRO_AGENT_CONFIG_PATH, "utf8");
     return JSON.parse(raw) as KiroAgentConfig;
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
+  } catch (error: unknown) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       return {};
     }
     throw new Error(

@@ -76,6 +76,10 @@ interface AppState {
 
 const toolKindMap = new Map<string, CreatedFile["kind"]>();
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function getToolKey(sessionId: string, toolUseId: unknown): string | null {
   return typeof toolUseId === "string" ? `${sessionId}:${toolUseId}` : null;
 }
@@ -179,13 +183,15 @@ function extractFilesFromMessage(msg: StreamMessage, sessionId: string, cwd?: st
   try {
     if (!msg || typeof msg !== "object") return files;
 
-    const anyMessage = msg as any;
-    if (anyMessage?.type === "assistant" && Array.isArray(anyMessage.message?.content)) {
-      for (const content of anyMessage.message.content) {
-        if (content?.type !== "tool_use") continue;
-        const input = content.input as Record<string, unknown> | undefined;
-        const filePath = typeof input?.file_path === "string" ? input.file_path :
-          typeof input?.path === "string" ? input.path : null;
+    if (msg.type === "assistant" && Array.isArray(msg.message.content)) {
+      for (const content of msg.message.content) {
+        if (!isRecord(content) || content.type !== "tool_use") continue;
+        const input = isRecord(content.input) ? content.input : undefined;
+        const filePath = typeof input?.file_path === "string"
+          ? input.file_path
+          : typeof input?.path === "string"
+            ? input.path
+            : null;
         if (!filePath) continue;
         const kind = getFileKindForTool(content.name);
         const key = getToolKey(sessionId, content.id);
@@ -195,12 +201,13 @@ function extractFilesFromMessage(msg: StreamMessage, sessionId: string, cwd?: st
     }
 
     const msgStr = JSON.stringify(msg);
-    const binaryFileExtensions = /(?:^|[\s"'(])([\/\w][\w\/\-\.]*\.(xlsx|xls|xlsm|xlsb|csv|pdf|docx|doc|pptx|ppt|png|jpg|jpeg|gif|svg|zip|tar|gz))(?:[\s"'),]|$)/gi;
+    const binaryFileExtensions = /(?:^|[\s"'(])([/\w][\w/.-]*\.(xlsx|xls|xlsm|xlsb|csv|pdf|docx|doc|pptx|ppt|png|jpg|jpeg|gif|svg|zip|tar|gz))(?:[\s"'),]|$)/gi;
     let binaryMatch;
-    let regexKind: CreatedFile["kind"] = anyMessage?.type === "assistant" ? "created" : "accessed";
-    if (anyMessage?.type === "user" && Array.isArray(anyMessage.message?.content)) {
-      const resultContent = anyMessage.message.content.find(
-        (item: any) => item?.type === "tool_result" && typeof item.tool_use_id === "string"
+    let regexKind: CreatedFile["kind"] = msg.type === "assistant" ? "created" : "accessed";
+    if (msg.type === "user" && Array.isArray(msg.message.content)) {
+      const resultContent = msg.message.content.find(
+        (item: unknown): item is { type: "tool_result"; tool_use_id: string } =>
+          isRecord(item) && item.type === "tool_result" && typeof item.tool_use_id === "string"
       );
       if (resultContent) {
         matchedToolKey = getToolKey(sessionId, resultContent.tool_use_id);

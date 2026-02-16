@@ -31,8 +31,8 @@ export async function loadSkills(): Promise<{ user: SkillInfo[]; project: SkillI
     }
     user.sort((a, b) => a.name.localeCompare(b.name));
     return { user, project: [] };
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
+  } catch (error: unknown) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       return { user: [], project: [] };
     }
     return { user: [], project: [] };

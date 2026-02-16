@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type {
   AgentAssistantMessage,
   AgentMessage,
   AgentPermissionResult,
   AgentResultMessage,
+  AgentSystemMessage,
   AgentUserMessage
 } from "../../shared/agent-schema.js";
 import type { StreamMessage } from "../types";
@@ -14,6 +15,8 @@ import { DecisionPanel } from "./DecisionPanel";
 type MessageContent = AgentAssistantMessage["message"]["content"][number];
 type ToolResultContent = AgentUserMessage["message"]["content"][number];
 type ToolStatus = "pending" | "success" | "error";
+type UnknownRecord = Record<string, unknown>;
+
 const toolStatusMap = new Map<string, ToolStatus>();
 const toolStatusListeners = new Set<() => void>();
 
@@ -26,12 +29,22 @@ type AskUserQuestionInput = {
   }>;
 };
 
+const isRecord = (value: unknown): value is UnknownRecord =>
+  typeof value === "object" && value !== null;
+
+const readString = (value: unknown): string | null =>
+  typeof value === "string" && value.length > 0 ? value : null;
+
 const getAskUserQuestionSignature = (input?: AskUserQuestionInput | null) => {
   if (!input?.questions?.length) return "";
-  return input.questions.map((question) => {
-    const options = (question.options ?? []).map((o) => `${o.label}|${o.description ?? ""}`).join(",");
-    return `${question.question}|${question.header ?? ""}|${question.multiSelect ? "1" : "0"}|${options}`;
-  }).join("||");
+  return input.questions
+    .map((question) => {
+      const options = (question.options ?? [])
+        .map((option) => `${option.label}|${option.description ?? ""}`)
+        .join(",");
+      return `${question.question}|${question.header ?? ""}|${question.multiSelect ? "1" : "0"}|${options}`;
+    })
+    .join("||");
 };
 
 const setToolStatus = (toolUseId: string | undefined, status: ToolStatus) => {
@@ -40,36 +53,50 @@ const setToolStatus = (toolUseId: string | undefined, status: ToolStatus) => {
   toolStatusListeners.forEach((listener) => listener());
 };
 
-const useToolStatus = (toolUseId: string | undefined) => {
-  const [status, setStatus] = useState<ToolStatus | undefined>(() =>
-    toolUseId ? toolStatusMap.get(toolUseId) : undefined
-  );
-  useEffect(() => {
-    if (!toolUseId) return;
-    const handleUpdate = () => setStatus(toolStatusMap.get(toolUseId));
-    toolStatusListeners.add(handleUpdate);
-    return () => { toolStatusListeners.delete(handleUpdate); };
-  }, [toolUseId]);
-  return status;
+const subscribeToolStatus = (listener: () => void) => {
+  toolStatusListeners.add(listener);
+  return () => {
+    toolStatusListeners.delete(listener);
+  };
 };
 
-const StatusDot = ({ variant = "accent", isActive = false, isVisible = true }: {
-  variant?: "accent" | "success" | "error"; isActive?: boolean; isVisible?: boolean;
+const useToolStatus = (toolUseId: string | undefined) =>
+  useSyncExternalStore(
+    subscribeToolStatus,
+    () => (toolUseId ? toolStatusMap.get(toolUseId) : undefined),
+    () => undefined
+  );
+
+const StatusDot = ({
+  variant = "accent",
+  isActive = false,
+  isVisible = true
+}: {
+  variant?: "accent" | "success" | "error";
+  isActive?: boolean;
+  isVisible?: boolean;
 }) => {
   if (!isVisible) return null;
-  const colorClass = variant === "success" ? "bg-success" : variant === "error" ? "bg-error" : "bg-accent";
+  const colorClass =
+    variant === "success" ? "bg-success" : variant === "error" ? "bg-error" : "bg-accent";
   return (
     <span className="relative flex h-2 w-2">
-      {isActive && <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${colorClass} opacity-75`} />}
+      {isActive && (
+        <span
+          className={`absolute inline-flex h-full w-full animate-ping rounded-full ${colorClass} opacity-75`}
+        />
+      )}
       <span className={`relative inline-flex h-2 w-2 rounded-full ${colorClass}`} />
     </span>
   );
 };
 
 const SessionResult = ({ message }: { message: AgentResultMessage }) => {
-  const formatMinutes = (ms: number | undefined) => typeof ms !== "number" ? "-" : `${(ms / 60000).toFixed(2)} min`;
-  const formatUsd = (usd: number | undefined) => typeof usd !== "number" ? "-" : usd.toFixed(2);
-  const formatMillions = (tokens: number | undefined) => typeof tokens !== "number" ? "-" : `${(tokens / 1_000_000).toFixed(4)} M`;
+  const formatMinutes = (ms: number | undefined) =>
+    typeof ms !== "number" ? "-" : `${(ms / 60000).toFixed(2)} min`;
+  const formatUsd = (usd: number | undefined) => (typeof usd !== "number" ? "-" : usd.toFixed(2));
+  const formatMillions = (tokens: number | undefined) =>
+    typeof tokens !== "number" ? "-" : `${(tokens / 1_000_000).toFixed(4)} M`;
 
   return (
     <div className="flex flex-col gap-2 mt-4">
@@ -77,36 +104,47 @@ const SessionResult = ({ message }: { message: AgentResultMessage }) => {
       <div className="flex flex-col rounded-xl px-4 py-3 border border-ink-900/10 bg-surface-secondary space-y-2">
         <div className="flex flex-wrap items-center gap-2 text-[14px]">
           <span className="font-normal">Duration</span>
-          <span className="inline-flex items-center rounded-full bg-surface-tertiary px-2.5 py-0.5 text-ink-700 text-[13px]">{formatMinutes(message.duration_ms)}</span>
+          <span className="inline-flex items-center rounded-full bg-surface-tertiary px-2.5 py-0.5 text-ink-700 text-[13px]">
+            {formatMinutes(message.duration_ms)}
+          </span>
           <span className="font-normal">API</span>
-          <span className="inline-flex items-center rounded-full bg-surface-tertiary px-2.5 py-0.5 text-ink-700 text-[13px]">{formatMinutes(message.duration_api_ms)}</span>
+          <span className="inline-flex items-center rounded-full bg-surface-tertiary px-2.5 py-0.5 text-ink-700 text-[13px]">
+            {formatMinutes(message.duration_api_ms)}
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[14px]">
           <span className="font-normal">Usage</span>
-          <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-accent text-[13px]">Cost ${formatUsd(message.total_cost_usd)}</span>
-          <span className="inline-flex items-center rounded-full bg-surface-tertiary px-2.5 py-0.5 text-ink-700 text-[13px]">Input {formatMillions(message.usage?.input_tokens)}</span>
-          <span className="inline-flex items-center rounded-full bg-surface-tertiary px-2.5 py-0.5 text-ink-700 text-[13px]">Output {formatMillions(message.usage?.output_tokens)}</span>
+          <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 text-accent text-[13px]">
+            Cost ${formatUsd(message.total_cost_usd)}
+          </span>
+          <span className="inline-flex items-center rounded-full bg-surface-tertiary px-2.5 py-0.5 text-ink-700 text-[13px]">
+            Input {formatMillions(message.usage?.input_tokens)}
+          </span>
+          <span className="inline-flex items-center rounded-full bg-surface-tertiary px-2.5 py-0.5 text-ink-700 text-[13px]">
+            Output {formatMillions(message.usage?.output_tokens)}
+          </span>
         </div>
       </div>
     </div>
   );
 };
 
-export function isMarkdown(text: string): boolean {
+const isMarkdown = (text: string): boolean => {
   if (!text || typeof text !== "string") return false;
   const patterns: RegExp[] = [/^#{1,6}\s+/m, /```[\s\S]*?```/];
   return patterns.some((pattern) => pattern.test(text));
-}
+};
 
-function extractTagContent(input: string, tag: string): string | null {
+const extractTagContent = (input: string, tag: string): string | null => {
   const match = input.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
   return match ? match[1] : null;
-}
+};
 
 const tryFormatJsonContent = (text: string): string | null => {
   const trimmed = text.trim();
   if (!trimmed) return null;
-  const isJsonCandidate = (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+  const isJsonCandidate =
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
     (trimmed.startsWith("[") && trimmed.endsWith("]"));
   if (!isJsonCandidate) return null;
   try {
@@ -123,25 +161,84 @@ const formatModelBadge = (model: unknown): string | null => {
   return trimmed.length ? `Model: ${trimmed}` : null;
 };
 
+const readToolResultArrayOutput = (content: unknown[]): string =>
+  content
+    .map((item) => {
+      if (!isRecord(item)) return "";
+      return readString(item.text) ?? "";
+    })
+    .join("\n");
+
+const readModelInfoText = (message: AgentMessage): string => {
+  if (message.type !== "system") return "";
+  const messageRecord = message as unknown as UnknownRecord;
+  if (messageRecord.subtype !== "model-info") return "";
+  const payload = messageRecord.message;
+  if (!isRecord(payload) || !Array.isArray(payload.content) || payload.content.length === 0) {
+    return "";
+  }
+  const firstContent = payload.content[0];
+  if (!isRecord(firstContent)) return "";
+  return readString(firstContent.text) ?? "";
+};
+
+const readTranscriptText = (assistantMessage: AgentAssistantMessage): string | null => {
+  const messageRecord = assistantMessage.message as unknown as UnknownRecord;
+  const transcript = messageRecord.transcript;
+  if (!Array.isArray(transcript) || transcript.length === 0) return null;
+  const text = transcript
+    .map((block) => {
+      if (!isRecord(block)) return "";
+      return readString(block.text) ?? "";
+    })
+    .filter((block) => block.length > 0)
+    .join("\n\n");
+  return text.length > 0 ? text : null;
+};
+
+const getToolInfo = (messageContent: Extract<MessageContent, { type: "tool_use" }>): string | null => {
+  const input = isRecord(messageContent.input) ? messageContent.input : {};
+  switch (messageContent.name) {
+    case "Bash":
+      return readString(input.command);
+    case "Read":
+    case "Write":
+    case "Edit":
+      return readString(input.file_path);
+    case "Glob":
+    case "Grep":
+      return readString(input.pattern);
+    case "Task":
+      return readString(input.description);
+    case "WebFetch":
+      return readString(input.url);
+    default:
+      return null;
+  }
+};
+
 const ToolResult = ({ messageContent }: { messageContent: ToolResultContent }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const isToolResult = messageContent.type === "tool_result";
+  const toolUseId = isToolResult ? messageContent.tool_use_id : undefined;
+  const status: ToolStatus = isToolResult && messageContent.is_error ? "error" : "success";
+
+  useEffect(() => {
+    if (!isToolResult) return;
+    setToolStatus(toolUseId, status);
+  }, [isToolResult, toolUseId, status]);
+
+  if (!isToolResult) return null;
+
   let rawOutput = "";
-
-  if (messageContent.type !== "tool_result") return null;
-  
-  const toolUseId = messageContent.tool_use_id;
-  const status: ToolStatus = messageContent.is_error ? "error" : "success";
-  const isError = messageContent.is_error;
-
   if (messageContent.is_error) {
-    rawOutput = extractTagContent(String(messageContent.content), "tool_use_error") || String(messageContent.content);
+    rawOutput =
+      extractTagContent(String(messageContent.content), "tool_use_error") ?? String(messageContent.content);
   } else {
     try {
-      if (Array.isArray(messageContent.content)) {
-        rawOutput = messageContent.content.map((item: any) => item.text || "").join("\n");
-      } else {
-        rawOutput = String(messageContent.content);
-      }
+      rawOutput = Array.isArray(messageContent.content)
+        ? readToolResultArrayOutput(messageContent.content)
+        : String(messageContent.content);
     } catch {
       rawOutput = JSON.stringify(messageContent, null, 2);
     }
@@ -151,7 +248,6 @@ const ToolResult = ({ messageContent }: { messageContent: ToolResultContent }) =
   const displayText = formattedJson ?? rawOutput;
   const lines = displayText ? displayText.split("\n") : [];
   const isMarkdownContent = !formattedJson && isMarkdown(rawOutput);
-  useEffect(() => { setToolStatus(toolUseId, status); }, [toolUseId, status]);
 
   return (
     <div className="flex flex-col mt-4 rounded-xl border border-ink-900/10 bg-surface-tertiary px-3 py-3">
@@ -168,12 +264,14 @@ const ToolResult = ({ messageContent }: { messageContent: ToolResultContent }) =
         </button>
       </div>
       {!isExpanded && (
-        <p className="mt-2 text-xs text-muted">
-          Output hidden{lines.length ? ` (${lines.length} lines)` : ""}.
-        </p>
+        <p className="mt-2 text-xs text-muted">Output hidden{lines.length ? ` (${lines.length} lines)` : ""}.</p>
       )}
       {isExpanded && (
-        <div className={`mt-3 text-sm whitespace-pre-wrap break-words ${isError ? "text-red-500" : "text-ink-700"}`}>
+        <div
+          className={`mt-3 text-sm whitespace-pre-wrap break-words ${
+            messageContent.is_error ? "text-red-500" : "text-ink-700"
+          }`}
+        >
           {isMarkdownContent ? (
             <MDContent text={displayText} />
           ) : (
@@ -185,7 +283,17 @@ const ToolResult = ({ messageContent }: { messageContent: ToolResultContent }) =
   );
 };
 
-const AssistantBlockCard = ({ title, text, showIndicator = false, badge }: { title: string; text: string; showIndicator?: boolean; badge?: string }) => (
+const AssistantBlockCard = ({
+  title,
+  text,
+  showIndicator = false,
+  badge
+}: {
+  title: string;
+  text: string;
+  showIndicator?: boolean;
+  badge?: string;
+}) => (
   <div className="flex flex-col mt-4">
     <div className="header text-accent flex items-center gap-2">
       <StatusDot variant="success" isActive={showIndicator} isVisible={showIndicator} />
@@ -200,37 +308,36 @@ const AssistantBlockCard = ({ title, text, showIndicator = false, badge }: { tit
   </div>
 );
 
-const ToolUseCard = ({ messageContent, showIndicator = false }: { messageContent: MessageContent; showIndicator?: boolean }) => {
-  if (messageContent.type !== "tool_use") return null;
-  
-  const toolStatus = useToolStatus(messageContent.id);
+const ToolUseCard = ({
+  messageContent,
+  showIndicator = false
+}: {
+  messageContent: MessageContent;
+  showIndicator?: boolean;
+}) => {
+  const isToolUse = messageContent.type === "tool_use";
+  const toolUseId = isToolUse ? messageContent.id : undefined;
+  const toolStatus = useToolStatus(toolUseId);
   const statusVariant = toolStatus === "error" ? "error" : "success";
   const isPending = !toolStatus || toolStatus === "pending";
   const shouldShowDot = toolStatus === "success" || toolStatus === "error" || showIndicator;
 
   useEffect(() => {
-    if (messageContent?.id && !toolStatusMap.has(messageContent.id)) setToolStatus(messageContent.id, "pending");
-  }, [messageContent?.id]);
+    if (!toolUseId || toolStatusMap.has(toolUseId)) return;
+    setToolStatus(toolUseId, "pending");
+  }, [toolUseId]);
 
-  const getToolInfo = (): string | null => {
-    const input = messageContent.input as Record<string, any>;
-    switch (messageContent.name) {
-      case "Bash": return input?.command || null;
-      case "Read": case "Write": case "Edit": return input?.file_path || null;
-      case "Glob": case "Grep": return input?.pattern || null;
-      case "Task": return input?.description || null;
-      case "WebFetch": return input?.url || null;
-      default: return null;
-    }
-  };
+  if (!isToolUse) return null;
 
   return (
     <div className="flex flex-col gap-2 rounded-[1rem] bg-surface-tertiary px-3 py-2 mt-4 overflow-hidden">
       <div className="flex flex-row items-center gap-2 min-w-0">
         <StatusDot variant={statusVariant} isActive={isPending && showIndicator} isVisible={shouldShowDot} />
         <div className="flex flex-row items-center gap-2 tool-use-item min-w-0 flex-1">
-          <span className="inline-flex items-center rounded-md text-accent py-0.5 text-sm font-medium shrink-0">{messageContent.name}</span>
-          <span className="text-sm text-muted truncate">{getToolInfo()}</span>
+          <span className="inline-flex items-center rounded-md text-accent py-0.5 text-sm font-medium shrink-0">
+            {messageContent.name}
+          </span>
+          <span className="text-sm text-muted truncate">{getToolInfo(messageContent)}</span>
         </div>
       </div>
     </div>
@@ -247,17 +354,20 @@ const AskUserQuestionCard = ({
   onPermissionResult?: (toolUseId: string, result: AgentPermissionResult) => void;
 }) => {
   if (messageContent.type !== "tool_use") return null;
-  
+
   const input = messageContent.input as AskUserQuestionInput | null;
   const questions = input?.questions ?? [];
   const currentSignature = getAskUserQuestionSignature(input);
-  const requestSignature = getAskUserQuestionSignature(permissionRequest?.input as AskUserQuestionInput | undefined);
+  const requestSignature = getAskUserQuestionSignature(
+    permissionRequest?.input as AskUserQuestionInput | undefined
+  );
   const isActiveRequest = permissionRequest && currentSignature === requestSignature;
 
   if (isActiveRequest && onPermissionResult) {
     return (
       <div className="mt-4">
         <DecisionPanel
+          key={permissionRequest.toolUseId}
           request={permissionRequest}
           onSubmit={(result) => onPermissionResult(permissionRequest.toolUseId, result)}
         />
@@ -268,55 +378,67 @@ const AskUserQuestionCard = ({
   return (
     <div className="flex flex-col gap-2 rounded-[1rem] bg-surface-tertiary px-3 py-2 mt-4">
       <div className="flex flex-row items-center gap-2">
-        <StatusDot variant="success" isActive={false} isVisible={true} />
-        <span className="inline-flex items-center rounded-md text-accent py-0.5 text-sm font-medium">AskUserQuestion</span>
+        <StatusDot variant="success" isActive={false} isVisible />
+        <span className="inline-flex items-center rounded-md text-accent py-0.5 text-sm font-medium">
+          AskUserQuestion
+        </span>
       </div>
-      {questions.map((q, idx) => (
-        <div key={idx} className="text-sm text-ink-700 ml-4">{q.question}</div>
+      {questions.map((question, idx) => (
+        <div key={idx} className="text-sm text-ink-700 ml-4">
+          {question.question}
+        </div>
       ))}
     </div>
   );
 };
 
-const SystemInfoCard = ({ message, showIndicator = false }: { message: AgentMessage; showIndicator?: boolean }) => {
-  if (message.type !== "system" || !("subtype" in message) || message.subtype !== "init") return null;
-  
-  const systemMsg = message as any;
-  
-  const InfoItem = ({ name, value }: { name: string; value: string }) => (
-    <div className="text-[14px]">
-      <span className="mr-4 font-normal">{name}</span>
-      <span className="font-light">{value}</span>
+const SystemInfoItem = ({ name, value }: { name: string; value: string }) => (
+  <div className="text-[14px]">
+    <span className="mr-4 font-normal">{name}</span>
+    <span className="font-light">{value}</span>
+  </div>
+);
+
+const SystemInfoCard = ({
+  message,
+  showIndicator = false
+}: {
+  message: AgentSystemMessage;
+  showIndicator?: boolean;
+}) => (
+  <div className="flex flex-col gap-2">
+    <div className="header text-accent flex items-center gap-2">
+      <StatusDot variant="success" isActive={showIndicator} isVisible={showIndicator} />
+      System Init
     </div>
-  );
-  
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="header text-accent flex items-center gap-2">
-        <StatusDot variant="success" isActive={showIndicator} isVisible={showIndicator} />
-        System Init
-      </div>
-      <div className="flex flex-col rounded-xl px-4 py-2 border border-ink-900/10 bg-surface-secondary space-y-1">
-        <InfoItem name="Session ID" value={systemMsg.session_id || "-"} />
-        <InfoItem name="Model Name" value={systemMsg.model || "-"} />
-        <InfoItem name="Permission Mode" value={systemMsg.permissionMode || "-"} />
-        <InfoItem name="Working Directory" value={systemMsg.cwd || "-"} />
-      </div>
+    <div className="flex flex-col rounded-xl px-4 py-2 border border-ink-900/10 bg-surface-secondary space-y-1">
+      <SystemInfoItem name="Session ID" value={message.session_id || "-"} />
+      <SystemInfoItem name="Model Name" value={message.model || "-"} />
+      <SystemInfoItem name="Permission Mode" value={message.permissionMode || "-"} />
+      <SystemInfoItem name="Working Directory" value={message.cwd || "-"} />
     </div>
-  );
-};
+  </div>
+);
 
 const ModelInfoCard = ({ message }: { message: AgentMessage }) => {
-  const text = (message as any)?.message?.content?.[0]?.text ?? "";
+  const text = readModelInfoText(message);
   if (!text) return null;
   return (
     <div className="flex items-center gap-2 mt-2 text-sm text-ink-700">
-      <span className="rounded-full bg-surface-secondary px-3 py-1 text-xs font-medium text-ink-900">{text}</span>
+      <span className="rounded-full bg-surface-secondary px-3 py-1 text-xs font-medium text-ink-900">
+        {text}
+      </span>
     </div>
   );
 };
 
-const UserMessageCard = ({ message, showIndicator = false }: { message: { type: "user_prompt"; prompt: string }; showIndicator?: boolean }) => (
+const UserMessageCard = ({
+  message,
+  showIndicator = false
+}: {
+  message: { type: "user_prompt"; prompt: string };
+  showIndicator?: boolean;
+}) => (
   <div className="flex flex-col mt-4">
     <div className="header text-accent flex items-center gap-2">
       <StatusDot variant="success" isActive={showIndicator} isVisible={showIndicator} />
@@ -348,11 +470,13 @@ export function MessageCard({
   const sdkMessage = message as AgentMessage;
 
   if (sdkMessage.type === "system") {
-    const subtype = (sdkMessage as any)?.subtype;
-    if (subtype === "model-info") {
+    if (readModelInfoText(sdkMessage)) {
       return <ModelInfoCard message={sdkMessage} />;
     }
-    return <SystemInfoCard message={sdkMessage} showIndicator={showIndicator} />;
+    if (sdkMessage.subtype === "init") {
+      return <SystemInfoCard message={sdkMessage} showIndicator={showIndicator} />;
+    }
+    return null;
   }
 
   if (sdkMessage.type === "result") {
@@ -371,13 +495,19 @@ export function MessageCard({
 
   if (sdkMessage.type === "assistant") {
     const contents = sdkMessage.message.content as MessageContent[];
-    const modelBadge = formatModelBadge((sdkMessage as any)?.model);
-    const transcriptBlocks = (sdkMessage.message as any)?.transcript;
-    if (Array.isArray(transcriptBlocks) && transcriptBlocks.length) {
-      const transcriptText = transcriptBlocks.map((block: any) => block.text ?? "").join("\n\n");
+    const assistantRecord = sdkMessage as unknown as UnknownRecord;
+    const modelBadge = formatModelBadge(assistantRecord.model);
+    const transcriptText = readTranscriptText(sdkMessage);
+
+    if (transcriptText) {
       return (
         <>
-          <AssistantBlockCard title="Assistant" text={transcriptText} showIndicator={showIndicator} badge={modelBadge ?? undefined} />
+          <AssistantBlockCard
+            title="Assistant"
+            text={transcriptText}
+            showIndicator={showIndicator}
+            badge={modelBadge ?? undefined}
+          />
           {contents
             .filter((content) => content.type === "tool_use")
             .map((content, idx) =>
@@ -395,28 +525,57 @@ export function MessageCard({
         </>
       );
     }
-    let modelBadgeUsed = false;
+
+    const firstTextIndex = contents.findIndex((content) => content.type === "text");
     return (
       <>
-        {contents.map((content: MessageContent, idx: number) => {
+        {contents.map((content, idx) => {
           const isLastContent = idx === contents.length - 1;
-          let badge: string | undefined;
-          if (!modelBadgeUsed && content.type === "text" && modelBadge) {
-            badge = modelBadge;
-            modelBadgeUsed = true;
-          }
+          const shouldShowBadge = idx === firstTextIndex && content.type === "text" && !!modelBadge;
+
           if (content.type === "thinking") {
-            return <AssistantBlockCard key={idx} title="Thinking" text={content.thinking} showIndicator={isLastContent && showIndicator} />;
+            return (
+              <AssistantBlockCard
+                key={idx}
+                title="Thinking"
+                text={content.thinking}
+                showIndicator={isLastContent && showIndicator}
+              />
+            );
           }
+
           if (content.type === "text") {
-            return <AssistantBlockCard key={idx} title="Assistant" text={content.text} showIndicator={isLastContent && showIndicator} badge={badge} />;
+            return (
+              <AssistantBlockCard
+                key={idx}
+                title="Assistant"
+                text={content.text}
+                showIndicator={isLastContent && showIndicator}
+                badge={shouldShowBadge ? modelBadge ?? undefined : undefined}
+              />
+            );
           }
+
           if (content.type === "tool_use") {
             if (content.name === "AskUserQuestion") {
-              return <AskUserQuestionCard key={idx} messageContent={content} permissionRequest={permissionRequest} onPermissionResult={onPermissionResult} />;
+              return (
+                <AskUserQuestionCard
+                  key={idx}
+                  messageContent={content}
+                  permissionRequest={permissionRequest}
+                  onPermissionResult={onPermissionResult}
+                />
+              );
             }
-            return <ToolUseCard key={idx} messageContent={content} showIndicator={isLastContent && showIndicator} />;
+            return (
+              <ToolUseCard
+                key={idx}
+                messageContent={content}
+                showIndicator={isLastContent && showIndicator}
+              />
+            );
           }
+
           return null;
         })}
       </>

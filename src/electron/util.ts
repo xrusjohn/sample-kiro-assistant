@@ -1,4 +1,4 @@
-import { ipcMain, WebContents, WebFrameMain } from "electron";
+import { ipcMain, type IpcMainInvokeEvent, WebContents, WebFrameMain } from "electron";
 import { getUIPath } from "./pathResolver.js";
 import { pathToFileURL } from "url";
 const DEFAULT_DEV_PORT = 5173;
@@ -10,11 +10,17 @@ export function isDev(): boolean {
 }
 
 // Making IPC Typesafe
-export function ipcMainHandle<Key extends keyof EventPayloadMapping>(key: Key, handler: (...args: any[]) => EventPayloadMapping[Key] | Promise<EventPayloadMapping[Key]>) {
+export function ipcMainHandle<Key extends keyof EventPayloadMapping, Args extends unknown[]>(
+    key: Key,
+    handler: (
+        event: IpcMainInvokeEvent,
+        ...args: Args
+    ) => EventPayloadMapping[Key] | Promise<EventPayloadMapping[Key]>
+) {
     ipcMain.handle(key, (event, ...args) => {
         if (event.senderFrame) validateEventFrame(event.senderFrame);
 
-        return handler(event, ...args)
+        return handler(event, ...(args as Args))
     });
 }
 

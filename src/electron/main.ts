@@ -1,5 +1,5 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from "electron"
-import { readFile, access, copyFile, mkdir } from "fs/promises"
+import { app, BrowserWindow, ipcMain, dialog, shell, type IpcMainInvokeEvent } from "electron"
+import { readFile, access, copyFile } from "fs/promises"
 import { constants } from "fs"
 import { extname, join, basename } from "path"
 import * as XLSX from "xlsx"
@@ -22,6 +22,28 @@ import "./libs/claude-settings.js";
 
 const execAsync = promisify(exec);
 let assistantSettings: AssistantSettings = {};
+
+type CommandExecError = {
+    message?: string;
+    stdout?: string;
+    stderr?: string;
+};
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === "object" && error !== null && "message" in error) {
+        const message = (error as { message?: unknown }).message;
+        if (typeof message === "string" && message.trim()) return message;
+    }
+    return fallback;
+};
+
+const getCommandErrorStream = (error: unknown, stream: "stdout" | "stderr"): string | undefined => {
+    if (!error || typeof error !== "object") return undefined;
+    const value = (error as CommandExecError)[stream];
+    return typeof value === "string" ? value : undefined;
+};
+
 app.on("ready", async () => {
     const templatePath = app.isPackaged
         ? join(process.resourcesPath, "agent_config.template.json")
@@ -74,12 +96,12 @@ app.on("ready", async () => {
     });
 
     // Handle session title generation
-    ipcMainHandle("generate-session-title", async (_: any, userInput: string | null) => {
+    ipcMainHandle("generate-session-title", async (_event: IpcMainInvokeEvent, userInput: string | null) => {
         return await generateSessionTitle(userInput);
     });
 
     // Handle recent cwds request
-    ipcMainHandle("get-recent-cwds", (_: any, limit?: number) => {
+    ipcMainHandle("get-recent-cwds", (_event: IpcMainInvokeEvent, limit?: number) => {
         const boundedLimit = limit ? Math.min(Math.max(limit, 1), 20) : 8;
         return sessions.listRecentCwds(boundedLimit);
     });
@@ -120,7 +142,7 @@ app.on("ready", async () => {
         };
     });
 
-    ipcMainHandle("set-default-model", (_: any, payload: { modelId: string }) => {
+    ipcMainHandle("set-default-model", (_event: IpcMainInvokeEvent, payload: { modelId: string }) => {
         const modelId = typeof payload?.modelId === "string" ? payload.modelId.trim() : "";
         const valid = availableModels.find((model) => model.id === modelId);
         if (!valid) {
@@ -156,7 +178,7 @@ app.on("ready", async () => {
     const pptExtensions = new Set(['.pptx']);
 
     // Read file content
-    ipcMainHandle("read-file", async (_: any, filePath: string) => {
+    ipcMainHandle("read-file", async (_event: IpcMainInvokeEvent, filePath: string) => {
         try {
             const ext = extname(filePath).toLowerCase();
             const mimeType = getMimeType(ext);
@@ -201,12 +223,12 @@ app.on("ready", async () => {
             if (excelExtensions.has(ext)) {
                 const buffer = await readFile(filePath);
                 const workbook = XLSX.read(buffer, { type: 'buffer' });
-                const sheets: Record<string, any[][]> = {};
+                const sheets: Record<string, unknown[][]> = {};
 
                 for (const sheetName of workbook.SheetNames) {
                     const worksheet = workbook.Sheets[sheetName];
                     // Convert to array of arrays (including headers)
-                    sheets[sheetName] = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+                    sheets[sheetName] = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
                 }
 
                 return {
@@ -237,10 +259,10 @@ app.on("ready", async () => {
                 fileType: 'binary',
                 mimeType
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
                 success: false,
-                error: error.message || 'Failed to read file',
+                error: getErrorMessage(error, 'Failed to read file'),
                 isText: false,
                 fileType: 'unknown'
             };
@@ -248,7 +270,7 @@ app.on("ready", async () => {
     });
 
     // Open file with default system application
-    ipcMainHandle("open-file-external", async (_: any, filePath: string) => {
+    ipcMainHandle("open-file-external", async (_event: IpcMainInvokeEvent, filePath: string) => {
         try {
             const errorMessage = await shell.openPath(filePath);
             if (errorMessage) {
@@ -262,12 +284,12 @@ app.on("ready", async () => {
         }
     });
 
-    ipcMainHandle("open-external-url", async (_: any, url: string) => {
+    ipcMainHandle("open-external-url", async (_event: IpcMainInvokeEvent, url: string) => {
         return await openExternalLink(url);
     });
 
     // Check if file exists
-    ipcMainHandle("file-exists", async (_: any, filePath: string) => {
+    ipcMainHandle("file-exists", async (_event: IpcMainInvokeEvent, filePath: string) => {
         try {
             await access(filePath, constants.F_OK);
             return true;
@@ -284,17 +306,17 @@ app.on("ready", async () => {
                 servers,
                 settingsPath: path
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
                 success: false,
                 servers: {},
-                error: error?.message ?? "Failed to load MCP servers",
+                error: getErrorMessage(error, "Failed to load MCP servers"),
                 settingsPath: getKiroMcpSettingsPath()
             };
         }
     });
 
-    ipcMainHandle("set-kiro-mcp-disabled", async (_: any, payload: { name: string; disabled: boolean }) => {
+    ipcMainHandle("set-kiro-mcp-disabled", async (_event: IpcMainInvokeEvent, payload: { name: string; disabled: boolean }) => {
         try {
             const name = payload?.name?.trim();
             if (!name) {
@@ -306,16 +328,16 @@ app.on("ready", async () => {
                 servers,
                 settingsPath: getKiroMcpSettingsPath()
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
                 success: false,
-                error: error?.message ?? "Failed to update MCP server",
+                error: getErrorMessage(error, "Failed to update MCP server"),
                 settingsPath: getKiroMcpSettingsPath()
             };
         }
     });
 
-    ipcMainHandle("run-kiro-command", async (_: any, payload: { cwd: string; command: string }) => {
+    ipcMainHandle("run-kiro-command", async (_event: IpcMainInvokeEvent, payload: { cwd: string; command: string }) => {
         const normalizedCwd = normalizeWorkingDirectory(payload?.cwd) ?? process.cwd();
         let command = payload?.command?.trim();
         if (!command) {
@@ -344,17 +366,17 @@ app.on("ready", async () => {
                 }
             });
             return { success: true, stdout, stderr };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
                 success: false,
-                error: error?.message ?? "Failed to run command",
-                stdout: error?.stdout,
-                stderr: error?.stderr
+                error: getErrorMessage(error, "Failed to run command"),
+                stdout: getCommandErrorStream(error, "stdout"),
+                stderr: getCommandErrorStream(error, "stderr")
             };
         }
     });
 
-    ipcMainHandle("copy-files-to-cwd", async (_: any, payload: { cwd: string; files: string[] }) => {
+    ipcMainHandle("copy-files-to-cwd", async (_event: IpcMainInvokeEvent, payload: { cwd: string; files: string[] }) => {
         const normalizedCwd = normalizeWorkingDirectory(payload?.cwd);
         if (!normalizedCwd) {
             return { success: false, error: "Working directory is required." };
@@ -390,8 +412,8 @@ app.on("ready", async () => {
                 const { path: destination, name } = await ensureDestination(normalizedCwd, filename);
                 await copyFile(source, destination);
                 copied.push({ source, destination, filename: name });
-            } catch (error: any) {
-                failed.push({ source, error: error?.message ?? "Failed to copy" });
+            } catch (error: unknown) {
+                failed.push({ source, error: getErrorMessage(error, "Failed to copy") });
             }
         }
 
@@ -412,10 +434,10 @@ app.on("ready", async () => {
                 user: fsResult.user,
                 project: fsResult.project
             };
-        } catch (error: any) {
+        } catch (error: unknown) {
             return {
                 success: false,
-                error: error?.message ?? "Failed to load skills",
+                error: getErrorMessage(error, "Failed to load skills"),
                 user: [],
                 project: []
             };

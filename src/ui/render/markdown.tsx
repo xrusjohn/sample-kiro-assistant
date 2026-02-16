@@ -10,7 +10,7 @@ export default function MDContent({ text }: { text: string }) {
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeRaw, rehypeHighlight]}
       components={{
-        a: ({ href, children, node: _node, ...anchorProps }) => {
+        a: ({ href, children, ...anchorProps }) => {
           const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
             if (!href) return;
             event.preventDefault();

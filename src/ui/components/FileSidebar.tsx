@@ -3,6 +3,8 @@ import type { CreatedFile } from "../types";
 import MDContent from "../render/markdown";
 
 type FileType = 'text' | 'image' | 'pdf' | 'excel' | 'ppt' | 'binary' | 'unknown';
+type ExcelSheetRow = unknown[];
+type ExcelSheets = Record<string, ExcelSheetRow[]>;
 
 interface FileSidebarProps {
   file: CreatedFile | null;
@@ -14,6 +16,17 @@ interface FileSidebarProps {
   onWidthChange: (width: number) => void;
   onClose: () => void;
   onOpenExternal: (file: CreatedFile) => void;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isExcelSheets(value: unknown): value is ExcelSheets {
+  if (!isRecord(value)) return false;
+  return Object.values(value).every((sheet) =>
+    Array.isArray(sheet) && sheet.every((row) => Array.isArray(row))
+  );
 }
 
 // Get syntax highlighting language based on extension
@@ -80,14 +93,28 @@ function getFileTypeName(extension: string): string {
 }
 
 // Excel table viewer component
-function ExcelViewer({ content, sheetNames }: { content: string | Record<string, any[][]>; sheetNames?: string[] }) {
+function ExcelViewer({ content, sheetNames }: { content: string | ExcelSheets; sheetNames?: string[] }) {
   const [activeSheet, setActiveSheet] = useState(0);
 
-  let sheets: Record<string, any[][]> = {};
+  let sheets: ExcelSheets | null = null;
+  let parseError: string | null = null;
   try {
-    sheets = typeof content === "string" ? JSON.parse(content) : content;
+    const parsed = typeof content === "string" ? JSON.parse(content) : content;
+    if (!isExcelSheets(parsed)) {
+      parseError = "Unsupported Excel data format";
+    } else {
+      sheets = parsed;
+    }
   } catch {
-    return <div className="p-4 text-sm text-error">Failed to parse Excel data</div>;
+    parseError = "Failed to parse Excel data";
+  }
+
+  if (parseError) {
+    return <div className="p-4 text-sm text-error">{parseError}</div>;
+  }
+
+  if (!sheets) {
+    return <div className="p-4 text-sm text-error">Unsupported Excel data format</div>;
   }
 
   const sheetNamesList = sheetNames || Object.keys(sheets);
@@ -133,7 +160,7 @@ function ExcelViewer({ content, sheetNames }: { content: string | Record<string,
                   {rowIdx + 1}
                 </td>
                 {/* Cells */}
-                {(row as any[]).map((cell, cellIdx) => (
+                {row.map((cell, cellIdx) => (
                   <td
                     key={cellIdx}
                     className="px-2 py-1.5 border border-ink-900/10 max-w-[200px] truncate"
