@@ -31,6 +31,10 @@
 - [ ] Session continuation — use ACP `session/load` to resume previous sessions after restart
 - [ ] ACP process restart with session resume — for applying config changes (MCP, model) mid-conversation
 - [ ] Expose session/load on server restart to reconnect to previous kiro-cli sessions
+- [x] Session rename — REST endpoint added (`POST /api/rename-session`), needs UI (double-click or context menu on sidebar)
+- [ ] Session export — download conversation as markdown
+- [ ] Session search — find sessions by content or title
+- [ ] Session pinning/favorites
 
 ## UI Polish
 - [ ] Add favicon
