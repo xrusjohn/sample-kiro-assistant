@@ -51,6 +51,16 @@ wss.on("connection", (ws) => {
 // --- REST API ---
 app.use(express.json());
 
+// --- Widgets toggle ---
+let widgetsEnabled = process.env.KIRO_WIDGETS !== "0";
+
+app.get("/api/widgets-enabled", (_req, res) => res.json(widgetsEnabled));
+app.post("/api/widgets-enabled", (req, res) => {
+  widgetsEnabled = req.body?.enabled !== false;
+  process.env.KIRO_WIDGETS = widgetsEnabled ? "1" : "0";
+  res.json(widgetsEnabled);
+});
+
 app.post("/api/generate-session-title", (req, res) => {
   res.json(generateSessionTitle(req.body.userInput ?? null));
 });

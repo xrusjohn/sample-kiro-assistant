@@ -32,6 +32,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
   const [updatingModel, setUpdatingModel] = useState(false);
+  const [widgetsEnabled, setWidgetsEnabled] = useState(true);
+
+  useEffect(() => {
+    if (open) fetch("/api/widgets-enabled").then(r => r.json()).then(v => setWidgetsEnabled(v)).catch(() => {});
+  }, [open]);
 
   const serverEntries = useMemo(
     () => Object.entries(servers).sort(([a], [b]) => a.localeCompare(b)),
@@ -258,6 +263,31 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   className={`inline-block h-5 w-5 transform rounded-full bg-surface transition-transform ${cliInteractive ? "translate-x-5" : "translate-x-1"}`}
                 />
                 <span className="sr-only">Toggle interactive CLI mode</span>
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-ink-900/10 bg-surface-secondary/70 p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-ink-900">Widgets</h3>
+                <p className="text-xs text-muted">
+                  {widgetsEnabled ? "Auto-inject interactive widgets (clock, meetings) in responses" : "Widgets disabled — text-only responses"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !widgetsEnabled;
+                  setWidgetsEnabled(next);
+                  fetch("/api/widgets-enabled", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: next }) }).catch(() => {});
+                }}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${widgetsEnabled ? "bg-accent" : "bg-ink-200"}`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-surface transition-transform ${widgetsEnabled ? "translate-x-5" : "translate-x-1"}`}
+                />
+                <span className="sr-only">Toggle widgets</span>
               </button>
             </div>
           </section>
