@@ -213,9 +213,10 @@ export function createAcpRunner(opts: {
 
       if (kind === "tool_call") {
         console.log("[kiro-acp tool_call]", JSON.stringify(update).slice(0, 300));
-        const toolName = (update.toolName ?? update.name ?? update.tool ?? "unknown");
+        const title = update.title ?? "";
+        const toolName = title.replace(/^Running:\s*/, "") || update.toolName ?? update.name ?? "unknown";
         toolsUsedThisTurn.add(toolName.toLowerCase());
-        emitDelta(`\n\n🛠️ Using tool: **${toolName}**\n`);
+        emitDelta(`\n\n🛠️ ${title || ("Using tool: **" + toolName + "**")}\n`);
         return;
       }
 
@@ -225,6 +226,9 @@ export function createAcpRunner(opts: {
       }
 
       if (kind === "turn_end") { finishTurn(); return; }
+
+      // Log any unhandled update types
+      console.log("[kiro-acp update]", kind, JSON.stringify(update).slice(0, 300));
     }
 
     // Response to session/prompt (stopReason)
