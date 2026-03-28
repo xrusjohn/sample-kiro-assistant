@@ -24,10 +24,18 @@ type Listener = (event: ServerEvent) => void;
 const listeners = new Set<Listener>();
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingMessages: string[] = [];
 
 function connectWs() {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   ws = new WebSocket(`${proto}//${window.location.host}/ws`);
+  ws.onopen = () => {
+    // Flush any queued messages
+    for (const msg of pendingMessages) ws!.send(msg);
+    pendingMessages = [];
+    // Always request session list on connect/reconnect
+    ws!.send(JSON.stringify({ type: "session.list" }));
+  };
   ws.onmessage = (msg) => {
     try {
       const event: ServerEvent = JSON.parse(msg.data);
@@ -76,7 +84,9 @@ window.electron = {
   getStaticData: async () => ({ totalStorage: 0, cpuModel: "remote", totalMemoryGB: 0 }),
 
   sendClientEvent: (event: ClientEvent) => {
-    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
+    const msg = JSON.stringify(event);
+    if (ws?.readyState === WebSocket.OPEN) ws.send(msg);
+    else pendingMessages.push(msg);
   },
 
   onServerEvent: (callback: Listener) => {
