@@ -13,6 +13,11 @@
 ## MCP Servers
 - [ ] Hot-reload MCP config mid-session (investigate ACP `session/set_mode` or restart ACP process)
 - [ ] Show MCP server initialization status in the UI during session startup
+- [ ] Per-session MCP server config — pass mcpServers to session/new instead of relying on agent_config.json
+- [ ] Agent self-service MCP config — let the agent add/disable/remove MCP servers via natural language
+  - Option A: Expose MCP management as REST API tools the agent can call
+  - Option B: System prompt instructing agent to edit agent_config.json directly
+  - Option C: Custom ACP extension for MCP management
 
 ## ACP Protocol
 - [ ] Handle `tool_call` and `tool_call_update` events for richer tool use display
