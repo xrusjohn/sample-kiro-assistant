@@ -55,6 +55,13 @@ app.post("/api/generate-session-title", (req, res) => {
   res.json(generateSessionTitle(req.body.userInput ?? null));
 });
 
+app.post("/api/rename-session", (req, res) => {
+  const { sessionId, title } = req.body ?? {};
+  if (!sessionId || !title?.trim()) { res.json({ success: false, error: "sessionId and title required" }); return; }
+  sessions.updateSession(sessionId, { title: title.trim() });
+  res.json({ success: true });
+});
+
 app.get("/api/recent-cwds", (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 8, 1), 20);
   res.json(sessions.listRecentCwds(limit));
