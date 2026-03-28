@@ -24,6 +24,140 @@ const EMPTY_PERMISSION_REQUESTS: PermissionRequest[] = [];
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+function downloadSessionMarkdown(title: string, messages: StreamMessage[]) {
+  const lines = [`# ${title || "Kiro Assistant Session"}\n\n_Exported ${new Date().toLocaleString()}_\n\n---\n`];
+  const filePromises: Promise<{index: number, html: string}>[] = [];
+
+  for (const msg of messages) {
+    if (msg.type === "user_prompt") {
+      lines.push(`## 👤 User\n\n${msg.prompt}\n\n---\n`);
+    } else if (msg.type === "assistant") {
+      const content = (msg as any).message?.content;
+      if (!Array.isArray(content)) continue;
+      const text = content
+        .filter((b: any) => b.type === "text" && b.text)
+        .map((b: any) => b.text)
+        .join("\n\n");
+      if (!text.trim()) continue;
+      // Check for widget:html file paths and fetch them
+      const fileMatch = text.match(/```widget:html\s*\n(\/[\w\/-]+\.html)\s*\n```/);
+      if (fileMatch) {
+        const idx = lines.length;
+        lines.push(`## 🤖 Assistant\n\n${text}\n\n---\n`); // placeholder
+        filePromises.push(
+          fetch(`/api/files?path=${encodeURIComponent(fileMatch[1])}`)
+            .then(r => r.ok ? r.text() : "")
+            .then(html => ({ index: idx, html }))
+            .catch(() => ({ index: idx, html: "" }))
+        );
+      } else {
+        lines.push(`## 🤖 Assistant\n\n${text}\n\n---\n`);
+      }
+    }
+  }
+
+  // Replace widget file paths with actual HTML content
+  Promise.all(filePromises).then(results => {
+    for (const { index, html } of results) {
+      if (html) {
+        lines[index] = lines[index].replace(
+          /```widget:html\s*\n\/[\w\/-]+\.html\s*\n```/,
+          `<details><summary>📊 Interactive Widget (open in browser)</summary>\n\n${html}\n\n</details>`
+        );
+      }
+    }
+    const md = lines.join("\n");
+    const filename = `${(title || "session").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.md`;
+    // Save to workspace for inspection
+    fetch("/api/export-session", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename, content: md })
+    }).catch(() => {});
+    // Browser download
+    const blob = new Blob([md], { type: "text/markdown" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+}
+
+async function downloadSessionHtml(title: string) {
+  // Grab all stylesheets
+  const styles = Array.from(document.styleSheets).map(ss => {
+    try { return Array.from(ss.cssRules).map(r => r.cssText).join("\n"); }
+    catch { return ""; }
+  }).join("\n");
+
+  // Clone the message area
+  const msgArea = document.querySelector(".mx-auto.max-w-3xl");
+  if (!msgArea) return;
+  const clone = msgArea.cloneNode(true) as HTMLElement;
+
+  // Replace iframes with their content
+  const iframes = clone.querySelectorAll("iframe");
+  for (const iframe of Array.from(iframes)) {
+    const src = iframe.getAttribute("src") || "";
+    if (src.includes("/api/files")) {
+      try {
+        const html = await fetch(src).then(r => r.text());
+        const wrapper = document.createElement("div");
+        wrapper.className = "embedded-widget";
+        wrapper.style.cssText = "border:1px solid #ddd;border-radius:12px;overflow:hidden;margin:12px 0";
+        wrapper.innerHTML = `<iframe srcdoc="${html.replace(/"/g, "&quot;")}" style="width:100%;height:${iframe.style.height || "500px"};border:0" sandbox="allow-scripts"></iframe>`;
+        iframe.parentElement?.replaceChild(wrapper, iframe);
+      } catch {}
+    }
+  }
+
+  const fullHtml = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>${title || "Kiro Assistant Session"}</title>
+<style>${styles}</style>
+<style>body{max-width:800px;margin:40px auto;padding:0 20px;background:#faf9f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}</style>
+</head><body>
+<h1 style="font-size:1.3rem;margin-bottom:4px">${title || "Kiro Assistant Session"}</h1>
+<p style="color:#888;font-size:13px">Exported ${new Date().toLocaleString()}</p>
+<hr style="margin:16px 0;border:none;border-top:1px solid #ddd">
+${clone.innerHTML}
+</body></html>`;
+
+  const filename = `${(title || "session").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.html`;
+  fetch("/api/export-session", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename, content: fullHtml })
+  }).catch(() => {});
+  const blob = new Blob([fullHtml], { type: "text/html" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function captureWidgetScreenshot(): Promise<string | null> {
+  const html2canvas = (await import("html2canvas")).default;
+  const iframes = document.querySelectorAll<HTMLIFrameElement>('iframe[title="HTML Widget"]');
+  const iframe = iframes[iframes.length - 1];
+  if (!iframe) return null;
+
+  try {
+    const iframeDoc = iframe.contentDocument;
+    if (!iframeDoc?.body) return null;
+    const canvas = await html2canvas(iframeDoc.body, {
+      backgroundColor: "#1a1a2e",
+      width: iframeDoc.body.scrollWidth,
+      height: iframeDoc.body.scrollHeight,
+      scale: 2,
+    });
+    return canvas.toDataURL("image/png");
+  } catch (e) {
+    console.error("[screenshot]", e);
+    return null;
+  }
+}
+
 const getPartialMessageContent = (streamEvent: unknown): string => {
   if (!isRecord(streamEvent) || !isRecord(streamEvent.delta)) return "";
   const deltaType = typeof streamEvent.delta.type === "string" ? streamEvent.delta.type : "";
@@ -292,10 +426,42 @@ function App() {
         style={{ marginRight: fileSidebarOpen ? `${fileSidebarWidth}px` : 0 }}
       >
         <div 
-          className="flex items-center justify-center h-12 border-b border-ink-900/10 bg-surface-cream select-none"
+          className="flex items-center justify-between h-12 border-b border-ink-900/10 bg-surface-cream select-none px-4"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
+          <div />
           <span className="text-sm font-medium text-ink-700">{activeSession?.title || "Kiro Assistant"}</span>
+          {messages.length > 0 ? (
+            <span style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties} className="flex gap-2">
+              <button
+                onClick={() => downloadSessionMarkdown(activeSession?.title || "", messages)}
+                className="text-xs text-muted hover:text-ink-700 transition-colors cursor-pointer"
+                title="Download as Markdown"
+              >⬇ .md</button>
+              <button
+                onClick={() => downloadSessionHtml(activeSession?.title || "")}
+                className="text-xs text-muted hover:text-ink-700 transition-colors cursor-pointer"
+                title="Download as HTML (high fidelity)"
+              >⬇ .html</button>
+              <button
+                onClick={async () => {
+                  const dataUrl = await captureWidgetScreenshot();
+                  if (!dataUrl) { alert("No widget to capture"); return; }
+                  const filename = `calendar-${Date.now()}.png`;
+                  const saveRes = await fetch("/api/save-image", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ filename, dataUrl })
+                  }).then(r => r.json()).catch(() => null);
+                  if (!saveRes?.success) { alert("Failed to save screenshot"); return; }
+                  sendEvent({ type: "session.continue", payload: { sessionId: activeSessionId!,
+                    prompt: `Use a subagent to email ${saveRes.path} to xrusjohn@amazon.com with subject "📅 Calendar View". The subagent should read the PNG, base64-encode it with: base64 -w 0 ${saveRes.path}, then send an email with body: <html><body><img src="data:image/png;base64,BASE64_HERE" style="max-width:100%"></body></html>`
+                  }});
+                }}
+                className="text-xs text-muted hover:text-ink-700 transition-colors cursor-pointer"
+                title="Email calendar screenshot"
+              >✉ email</button>
+            </span>
+          ) : <div />}
         </div>
 
         <div className="flex-1 overflow-y-auto px-8 pb-40 pt-6">

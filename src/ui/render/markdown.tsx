@@ -6,6 +6,12 @@ import remarkGfm from "remark-gfm";
 import { isWidgetLanguage, renderWidget } from "../widgets";
 
 export default function MDContent({ text }: { text: string }) {
+  const raw = String(text ?? "");
+  if (raw.includes("widget:")) {
+    console.log("[MDContent] widget block detected, full text length:", raw.length);
+    const widgetStart = raw.indexOf("widget:");
+    console.log("[MDContent] around widget:", raw.slice(Math.max(0, widgetStart - 50), widgetStart + 200));
+  }
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -63,7 +69,11 @@ export default function MDContent({ text }: { text: string }) {
         code: (props) => {
           const { children, className, ...rest } = props;
           const widget = isWidgetLanguage(className);
-          if (widget) return renderWidget(widget.name, String(children));
+          if (widget) {
+            const content = String(children);
+            console.log(`[widget:${widget.name}] className=${className} content.length=${content.length} preview=${content.slice(0, 200)}`);
+            return renderWidget(widget.name, content);
+          }
           const match = /language-(\w+)/.exec(className || "");
           const isInline = !match && !String(children).includes("\n");
 

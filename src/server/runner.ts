@@ -54,7 +54,8 @@ export function createAcpRunner(opts: {
     return { abort() {}, sendPrompt() {}, ready: Promise.reject(new Error("no binary")) };
   }
 
-  const child: ChildProcess = spawn(binary, ["acp", "--trust-all-tools"], {
+  const agent = (process.env.KIRO_AGENT ?? "kiro-assistant").trim();
+  const child: ChildProcess = spawn(binary, ["acp", "--agent", agent, "--trust-all-tools"], {
     cwd: normalizedCwd,
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...enhancedEnv, NO_COLOR: "1", CLICOLOR: "0", KIRO_CLI_DISABLE_PAGER: "1" }
@@ -83,32 +84,13 @@ export function createAcpRunner(opts: {
   };
 
   const finishTurn = () => {
-    // Inject widgets based on content patterns (disable with KIRO_WIDGETS=0)
-    if (process.env.KIRO_WIDGETS !== "0") {
-    const timePattern = /\d{1,2}:\d{2}\s*(AM|PM|UTC|EST|CST|CDT|PST|PDT|GMT)/i;
-
-    // Detect meeting lists: multiple lines with time patterns
-    const meetingLinePattern = /(\d{1,2}:\d{2}\s*(?:AM|PM|UTC)?)\s*[–—-]\s*(?:\d{1,2}:\d{2}\s*(?:AM|PM|UTC)?\s*[–—-]\s*)?(.+)/gi;
-    const meetingMatches = [...accumulatedText.matchAll(meetingLinePattern)];
-
-    if (meetingMatches.length >= 2) {
-      const meetings = meetingMatches.map(m => {
-        const title = m[2].replace(/\*+/g, "").trim();
-        const status = /\(accepted\)/i.test(title) ? "accepted"
-          : /\(tentative\)/i.test(title) ? "tentative"
-          : /\(declined\)/i.test(title) ? "declined"
-          : /\(you organized\)/i.test(title) ? "organized" : "";
-        const cleanTitle = title.replace(/\s*\((accepted|tentative|declined|you organized)[^)]*\)/gi, "").trim();
-        return { time: m[1].trim(), title: cleanTitle, status };
-      });
-      const dateMatch = accumulatedText.match(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+\w+\s+\d{1,2}(?:st|nd|rd|th)?/i);
+    // If a calendar HTML file was mentioned this turn, inject as widget via file path
+    const calendarMatch = accumulatedText.match(/(\/[\w\/-]+calendar[\w-]*\.html)/i);
+    if (calendarMatch) {
+      // Remove any agent-emitted widget:html block that has the file path
+      accumulatedText = accumulatedText.replace(/```widget:html\s*\n[^\n]*calendar[^\n]*\.html\s*\n```/gi, "");
       const tick = "`";
-      const widgetBlock = `\n\n${tick}${tick}${tick}widget:meetings\n${JSON.stringify({ meetings, date: dateMatch?.[0] ?? "" })}\n${tick}${tick}${tick}\n`;
-      emitDelta(widgetBlock);
-    } else if (timePattern.test(accumulatedText)) {
-      const tick = "`";
-      emitDelta(`\n\n${tick}${tick}${tick}widget:clock\n{}\n${tick}${tick}${tick}\n`);
-    }
+      emitDelta(`\n\n${tick}${tick}${tick}widget:html\n${calendarMatch[1]}\n${tick}${tick}${tick}\n`);
     }
     toolsUsedThisTurn.clear();
 
@@ -214,7 +196,7 @@ export function createAcpRunner(opts: {
       if (kind === "tool_call") {
         console.log("[kiro-acp tool_call]", JSON.stringify(update).slice(0, 300));
         const title = update.title ?? "";
-        const toolName = title.replace(/^Running:\s*/, "") || update.toolName ?? update.name ?? "unknown";
+        const toolName = title.replace(/^Running:\s*/, "") || (update.toolName ?? update.name ?? "unknown");
         toolsUsedThisTurn.add(toolName.toLowerCase());
         emitDelta(`\n\n🛠️ ${title || ("Using tool: **" + toolName + "**")}\n`);
         return;

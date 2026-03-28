@@ -49,7 +49,7 @@ wss.on("connection", (ws) => {
 });
 
 // --- REST API ---
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 
 // --- Widgets toggle ---
 let widgetsEnabled = process.env.KIRO_WIDGETS !== "0";
@@ -160,6 +160,27 @@ app.get("/api/files", async (req, res) => {
     await access(resolved, constants.R_OK);
     res.sendFile(resolved);
   } catch { res.status(404).send("Not found"); }
+});
+
+app.post("/api/export-session", async (req, res) => {
+  try {
+    const { filename, content } = req.body;
+    const outPath = join("/workspace", filename);
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(outPath, content, "utf-8");
+    res.json({ success: true, path: outPath });
+  } catch (e: any) { res.json({ success: false, error: e.message }); }
+});
+
+app.post("/api/save-image", async (req, res) => {
+  try {
+    const { filename, dataUrl } = req.body;
+    const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
+    const outPath = join("/workspace", filename);
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(outPath, Buffer.from(base64, "base64"));
+    res.json({ success: true, path: outPath });
+  } catch (e: any) { res.json({ success: false, error: e.message }); }
 });
 
 app.post("/api/file-exists", async (req, res) => {
