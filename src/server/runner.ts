@@ -80,7 +80,8 @@ export function createAcpRunner(opts: {
   };
 
   const finishTurn = () => {
-    // Inject widgets based on content patterns
+    // Inject widgets based on content patterns (disable with KIRO_WIDGETS=0)
+    if (process.env.KIRO_WIDGETS !== "0") {
     const timePattern = /\d{1,2}:\d{2}\s*(AM|PM|UTC|EST|CST|CDT|PST|PDT|GMT)/i;
 
     // Detect meeting lists: multiple lines with time patterns
@@ -104,6 +105,7 @@ export function createAcpRunner(opts: {
     } else if (timePattern.test(accumulatedText)) {
       const tick = "`";
       emitDelta(`\n\n${tick}${tick}${tick}widget:clock\n{}\n${tick}${tick}${tick}\n`);
+    }
     }
     toolsUsedThisTurn.clear();
 
@@ -180,7 +182,8 @@ export function createAcpRunner(opts: {
       }
 
       if (kind === "tool_call") {
-        const toolName = (update.toolName ?? update.name ?? "unknown");
+        console.log("[kiro-acp tool_call]", JSON.stringify(update).slice(0, 300));
+        const toolName = (update.toolName ?? update.name ?? update.tool ?? "unknown");
         toolsUsedThisTurn.add(toolName.toLowerCase());
         emitDelta(`\n\n🛠️ Using tool: **${toolName}**\n`);
         return;
