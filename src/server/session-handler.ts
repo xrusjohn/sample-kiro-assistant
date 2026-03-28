@@ -75,8 +75,19 @@ export function handleClientEvent(event: ClientEvent) {
     const session = sessions.getSession(event.payload.sessionId);
     if (!session) { emit({ type: "runner.error", payload: { message: "Unknown session" } }); return; }
 
-    const handle = runnerHandles.get(session.id);
-    if (!handle) { emit({ type: "runner.error", payload: { message: "No active runner for session" } }); return; }
+    let handle = runnerHandles.get(session.id);
+    if (!handle) {
+      // No runner — server was restarted. Spin up a new ACP process.
+      const modelId = resolveModelId();
+      session.selectedModel = modelId;
+      handle = createAcpRunner({
+        session: session as any,
+        model: modelId,
+        onEvent: emit,
+        onSessionUpdate: (u) => sessions.updateSession(session.id, u)
+      });
+      runnerHandles.set(session.id, handle);
+    }
 
     sessions.updateSession(session.id, { status: "running", lastPrompt: event.payload.prompt });
     emit({ type: "stream.user_prompt", payload: { sessionId: session.id, prompt: event.payload.prompt } });
