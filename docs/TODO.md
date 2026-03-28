@@ -28,7 +28,9 @@
 ## Session Management
 - [ ] Persist sessions across server restarts (currently sessions DB works but ACP process is gone)
 - [ ] Multi-session support — keep multiple ACP processes alive
-- [ ] Session continuation — reconnect to existing kiro-cli ACP process
+- [ ] Session continuation — use ACP `session/load` to resume previous sessions after restart
+- [ ] ACP process restart with session resume — for applying config changes (MCP, model) mid-conversation
+- [ ] Expose session/load on server restart to reconnect to previous kiro-cli sessions
 
 ## UI Polish
 - [ ] Add favicon
