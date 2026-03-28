@@ -6,61 +6,53 @@ import type { Session } from "../electron/libs/session-store.js";
 
 export type { Session };
 
-export type RunnerOptions = {
-  prompt: string;
-  session: Session;
-  resumeSessionId?: string;
-  onEvent: (event: ServerEvent) => void;
-  onSessionUpdate?: (updates: Partial<Session>) => void;
-  getModel: () => string;
+export type RunnerHandle = {
+  abort: () => void;
+  sendPrompt: (text: string) => void;
+  ready: Promise<void>;
 };
 
-export type RunnerHandle = { abort: () => void };
+type EmitFn = (event: ServerEvent) => void;
 
 const DEFAULT_CWD = process.cwd();
-
-const emitRunnerError = (message: string, options: RunnerOptions) => {
-  options.onEvent({ type: "runner.error", payload: { sessionId: options.session.id, message } });
-  options.onEvent({
-    type: "session.status",
-    payload: { sessionId: options.session.id, status: "error", title: options.session.title, cwd: options.session.cwd, error: message }
-  });
-};
 
 // JSON-RPC helpers
 let rpcId = 0;
 function rpcRequest(method: string, params: Record<string, unknown> = {}) {
   const msg = JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params }) + "\n";
-  console.log("[kiro-acp send]", msg.trim());
+  console.log("[kiro-acp send]", msg.trim().slice(0, 200));
   return msg;
 }
 
-// Parse newline-delimited JSON-RPC messages from a buffer
 function parseMessages(buffer: string): { messages: any[]; remainder: string } {
   const messages: any[] = [];
   const lines = buffer.split("\n");
-  const remainder = lines.pop() ?? ""; // last incomplete line
+  const remainder = lines.pop() ?? "";
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    try { messages.push(JSON.parse(trimmed)); } catch { /* skip non-JSON */ }
+    try { messages.push(JSON.parse(trimmed)); } catch { /* skip */ }
   }
   return { messages, remainder };
 }
 
-export async function runKiro(options: RunnerOptions): Promise<RunnerHandle> {
-  const { prompt, session, onEvent, onSessionUpdate } = options;
+export function createAcpRunner(opts: {
+  session: Session;
+  model: string;
+  onEvent: EmitFn;
+  onSessionUpdate?: (updates: Partial<Session>) => void;
+}): RunnerHandle {
+  const { session, model, onEvent, onSessionUpdate } = opts;
   const binary = resolveKiroCliBinary();
+  const normalizedCwd = normalizeWorkingDirectory(session.cwd) ?? DEFAULT_CWD;
+
   if (!binary) {
-    emitRunnerError("Could not find kiro-cli on PATH.", options);
-    return { abort: () => undefined };
+    onEvent({ type: "runner.error", payload: { sessionId: session.id, message: "Could not find kiro-cli on PATH." } });
+    onEvent({ type: "session.status", payload: { sessionId: session.id, status: "error", title: session.title, cwd: session.cwd, error: "kiro-cli not found" } });
+    return { abort() {}, sendPrompt() {}, ready: Promise.reject(new Error("no binary")) };
   }
 
-  const normalizedCwd = normalizeWorkingDirectory(session.cwd) ?? DEFAULT_CWD;
-  const model = options.getModel().trim();
-  const args = ["acp", "--trust-all-tools"];
-
-  const child: ChildProcess = spawn(binary, args, {
+  const child: ChildProcess = spawn(binary, ["acp", "--trust-all-tools"], {
     cwd: normalizedCwd,
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...enhancedEnv, NO_COLOR: "1", CLICOLOR: "0", KIRO_CLI_DISABLE_PAGER: "1" }
@@ -70,23 +62,12 @@ export async function runKiro(options: RunnerOptions): Promise<RunnerHandle> {
   let acpSessionId: string | null = null;
   let buffer = "";
   let streamingStarted = false;
-  let initialized = false;
   let accumulatedText = "";
+  let pendingPrompt: string | null = null;
+  let readyResolve: () => void;
+  const ready = new Promise<void>((resolve) => { readyResolve = resolve; });
 
-  // Emit model meta message
-  onEvent({
-    type: "stream.message",
-    payload: {
-      sessionId: session.id,
-      message: {
-        type: "system",
-        message: { id: crypto.randomUUID(), role: "system", content: [{ type: "text", text: `**Model:** ${model || "unknown"}` }] },
-        subtype: "meta", model, session_id: session.id, uuid: crypto.randomUUID(),
-        session_id_display: session.id, permissionMode: session.interactive ? "interactive" : "non-interactive", cwd: normalizedCwd
-      } as any
-    }
-  });
-
+  // --- Streaming helpers ---
   const emitDelta = (text: string) => {
     if (!text) return;
     accumulatedText += text;
@@ -97,12 +78,11 @@ export async function runKiro(options: RunnerOptions): Promise<RunnerHandle> {
     onEvent({ type: "stream.message", payload: { sessionId: session.id, message: { type: "stream_event", event: { type: "content_block_delta", delta: { type: "text_delta", text } } } as any } });
   };
 
-  const endStream = (status: "completed" | "error", error?: string) => {
+  const finishTurn = () => {
     if (streamingStarted) {
       onEvent({ type: "stream.message", payload: { sessionId: session.id, message: { type: "stream_event", event: { type: "content_block_stop" } } as any } });
       streamingStarted = false;
     }
-    // Emit the accumulated text as a permanent assistant message
     if (accumulatedText) {
       onEvent({
         type: "stream.message",
@@ -110,47 +90,52 @@ export async function runKiro(options: RunnerOptions): Promise<RunnerHandle> {
           sessionId: session.id,
           message: {
             type: "assistant",
-            message: {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content: [{ type: "text", text: accumulatedText }]
-            },
+            message: { id: crypto.randomUUID(), role: "assistant", content: [{ type: "text", text: accumulatedText }] },
             model, session_id: session.id, uuid: crypto.randomUUID()
           } as any
         }
       });
       accumulatedText = "";
     }
-    onEvent({
-      type: "session.status",
-      payload: { sessionId: session.id, status, title: session.title, cwd: session.cwd, error }
-    });
+    onEvent({ type: "session.status", payload: { sessionId: session.id, status: "completed", title: session.title, cwd: session.cwd } });
   };
 
+  // --- Send a prompt on the existing ACP session ---
+  const doSendPrompt = (text: string) => {
+    if (!acpSessionId || !child.stdin?.writable) return;
+    accumulatedText = "";
+    streamingStarted = false;
+    onEvent({ type: "session.status", payload: { sessionId: session.id, status: "running", title: session.title, cwd: session.cwd } });
+    child.stdin.write(rpcRequest("session/prompt", {
+      sessionId: acpSessionId,
+      prompt: [{ type: "text", text }]
+    }));
+  };
+
+  // --- Handle ACP messages ---
   const handleMessage = (msg: any) => {
     // Response to initialize
-    if (msg.id && msg.result?.agentInfo && !initialized) {
-      initialized = true;
-      // Create session
+    if (msg.id && msg.result?.agentInfo) {
       const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
       if (model) params.model = model;
       child.stdin?.write(rpcRequest("session/new", params));
       return;
     }
 
-    // Response to session/new — contains sessionId
+    // Response to session/new
     if (msg.id && msg.result?.sessionId && !acpSessionId) {
       acpSessionId = msg.result.sessionId;
       onSessionUpdate?.({ kiroConversationId: acpSessionId! });
-      // Now send the prompt
-      child.stdin?.write(rpcRequest("session/prompt", {
-        sessionId: acpSessionId,
-        prompt: [{ type: "text", text: prompt }]
-      }));
+      readyResolve();
+      // Send pending prompt if we have one
+      if (pendingPrompt) {
+        doSendPrompt(pendingPrompt);
+        pendingPrompt = null;
+      }
       return;
     }
 
-    // Notifications (streaming)
+    // Streaming updates
     if (msg.method === "session/update" && msg.params) {
       const update = msg.params.update ?? msg.params;
       const kind = update.sessionUpdate ?? update.kind ?? update.type;
@@ -159,46 +144,34 @@ export async function runKiro(options: RunnerOptions): Promise<RunnerHandle> {
         const contentType = update.content?.type ?? "text";
         const text = update.content?.text ?? "";
         if (!text) return;
-        if (contentType === "thinking") {
-          emitDelta(`*${text}*`);
-        } else {
-          emitDelta(text);
-        }
+        emitDelta(contentType === "thinking" ? `*${text}*` : text);
         return;
       }
 
       if (kind === "tool_call") {
-        const name = update.toolName ?? update.name ?? "unknown";
-        emitDelta(`\n\n🛠️ Using tool: **${name}**\n`);
+        emitDelta(`\n\n🛠️ Using tool: **${update.toolName ?? update.name ?? "unknown"}**\n`);
         return;
       }
 
-      if (kind === "turn_end") {
-        endStream("completed");
-        return;
-      }
+      if (kind === "turn_end") { finishTurn(); return; }
     }
 
-    // Response to session/prompt (stopReason: "end_turn")
-    if (msg.id && msg.result?.stopReason) {
-      endStream("completed");
-      return;
-    }
+    // Response to session/prompt (stopReason)
+    if (msg.id && msg.result?.stopReason) { finishTurn(); return; }
 
-    // Error response
+    // Error
     if (msg.error) {
       emitDelta(`\n\nError: ${msg.error.message ?? JSON.stringify(msg.error)}`);
-      endStream("error", msg.error.message);
+      onEvent({ type: "session.status", payload: { sessionId: session.id, status: "error", title: session.title, cwd: session.cwd, error: msg.error.message } });
     }
   };
 
+  // --- Wire up stdio ---
   child.stdout?.on("data", (data) => {
-    const raw = data.toString();
-    console.log("[kiro-acp stdout]", JSON.stringify(raw).slice(0, 200));
-    buffer += raw;
+    buffer += data.toString();
     const { messages, remainder } = parseMessages(buffer);
     buffer = remainder;
-    for (const msg of messages) handleMessage(msg);
+    for (const m of messages) handleMessage(m);
   });
 
   child.stderr?.on("data", (d) => {
@@ -207,17 +180,16 @@ export async function runKiro(options: RunnerOptions): Promise<RunnerHandle> {
   });
 
   child.on("error", (error) => {
-    emitRunnerError(error.message || "Failed to launch kiro-cli.", options);
+    onEvent({ type: "runner.error", payload: { sessionId: session.id, message: error.message } });
   });
 
   child.on("close", (code) => {
-    if (!aborted) {
-      if (streamingStarted) endStream(code === 0 ? "completed" : "error", code !== 0 ? `kiro-cli exited with code ${code}` : undefined);
-      else if (code !== 0) endStream("error", `kiro-cli exited with code ${code}`);
+    if (!aborted && code !== 0) {
+      onEvent({ type: "session.status", payload: { sessionId: session.id, status: "error", title: session.title, cwd: session.cwd, error: `kiro-cli exited with code ${code}` } });
     }
   });
 
-  // Start the ACP handshake
+  // --- Start ACP handshake ---
   child.stdin?.write(rpcRequest("initialize", {
     protocolVersion: 1,
     clientCapabilities: { fs: { readTextFile: true, writeTextFile: true }, terminal: true },
@@ -225,12 +197,19 @@ export async function runKiro(options: RunnerOptions): Promise<RunnerHandle> {
   }));
 
   return {
-    abort: () => {
+    ready,
+    sendPrompt(text: string) {
+      if (acpSessionId) {
+        doSendPrompt(text);
+      } else {
+        // ACP not ready yet — queue it
+        pendingPrompt = text;
+      }
+    },
+    abort() {
       if (aborted) return;
       aborted = true;
-      if (acpSessionId) {
-        child.stdin?.write(rpcRequest("session/cancel", { sessionId: acpSessionId }));
-      }
+      if (acpSessionId) child.stdin?.write(rpcRequest("session/cancel", { sessionId: acpSessionId }));
       setTimeout(() => child.kill("SIGINT"), 500);
     }
   };
