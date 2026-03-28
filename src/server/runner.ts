@@ -80,10 +80,30 @@ export function createAcpRunner(opts: {
   };
 
   const finishTurn = () => {
-    // Inject widgets based on tools used or content patterns
+    // Inject widgets based on content patterns
     const timePattern = /\d{1,2}:\d{2}\s*(AM|PM|UTC|EST|CST|CDT|PST|PDT|GMT)/i;
-    if (timePattern.test(accumulatedText)) {
-      emitDelta("\n\n" + "`" + "`" + "`" + "widget:clock\n{}\n" + "`" + "`" + "`" + "\n");
+
+    // Detect meeting lists: multiple lines with time patterns
+    const meetingLinePattern = /(\d{1,2}:\d{2}\s*(?:AM|PM|UTC)?)\s*[–—-]\s*(?:\d{1,2}:\d{2}\s*(?:AM|PM|UTC)?\s*[–—-]\s*)?(.+)/gi;
+    const meetingMatches = [...accumulatedText.matchAll(meetingLinePattern)];
+
+    if (meetingMatches.length >= 2) {
+      const meetings = meetingMatches.map(m => {
+        const title = m[2].replace(/\*+/g, "").trim();
+        const status = /\(accepted\)/i.test(title) ? "accepted"
+          : /\(tentative\)/i.test(title) ? "tentative"
+          : /\(declined\)/i.test(title) ? "declined"
+          : /\(you organized\)/i.test(title) ? "organized" : "";
+        const cleanTitle = title.replace(/\s*\((accepted|tentative|declined|you organized)[^)]*\)/gi, "").trim();
+        return { time: m[1].trim(), title: cleanTitle, status };
+      });
+      const dateMatch = accumulatedText.match(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+\w+\s+\d{1,2}(?:st|nd|rd|th)?/i);
+      const tick = "`";
+      const widgetBlock = `\n\n${tick}${tick}${tick}widget:meetings\n${JSON.stringify({ meetings, date: dateMatch?.[0] ?? "" })}\n${tick}${tick}${tick}\n`;
+      emitDelta(widgetBlock);
+    } else if (timePattern.test(accumulatedText)) {
+      const tick = "`";
+      emitDelta(`\n\n${tick}${tick}${tick}widget:clock\n{}\n${tick}${tick}${tick}\n`);
     }
     toolsUsedThisTurn.clear();
 

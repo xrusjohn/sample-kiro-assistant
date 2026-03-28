@@ -2,12 +2,14 @@ import type { ComponentType } from "react";
 import { ClockWidget } from "./Clock";
 import { CountdownWidget } from "./Countdown";
 import { ProgressWidget } from "./Progress";
+import { MeetingsWidget } from "./Meetings";
 
 // Registry: widget name → component
 const widgets: Record<string, ComponentType<any>> = {
   clock: ClockWidget,
   countdown: CountdownWidget,
   progress: ProgressWidget,
+  meetings: MeetingsWidget,
 };
 
 export function renderWidget(name: string, propsJson: string): JSX.Element | null {
