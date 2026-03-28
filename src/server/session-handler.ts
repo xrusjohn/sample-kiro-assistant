@@ -83,6 +83,7 @@ export function handleClientEvent(event: ClientEvent) {
       handle = createAcpRunner({
         session: session as any,
         model: modelId,
+        resumeSessionId: session.kiroConversationId || undefined,
         onEvent: emit,
         onSessionUpdate: (u) => sessions.updateSession(session.id, u)
       });

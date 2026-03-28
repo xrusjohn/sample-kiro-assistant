@@ -39,10 +39,11 @@ function parseMessages(buffer: string): { messages: any[]; remainder: string } {
 export function createAcpRunner(opts: {
   session: Session;
   model: string;
+  resumeSessionId?: string;
   onEvent: EmitFn;
   onSessionUpdate?: (updates: Partial<Session>) => void;
 }): RunnerHandle {
-  const { session, model, onEvent, onSessionUpdate } = opts;
+  const { session, model, resumeSessionId, onEvent, onSessionUpdate } = opts;
   const binary = resolveKiroCliBinary();
   const normalizedCwd = normalizeWorkingDirectory(session.cwd) ?? DEFAULT_CWD;
 
@@ -149,9 +150,13 @@ export function createAcpRunner(opts: {
   const handleMessage = (msg: any) => {
     // Response to initialize
     if (msg.id && msg.result?.agentInfo) {
-      const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
-      if (model) params.model = model;
-      child.stdin?.write(rpcRequest("session/new", params));
+      if (resumeSessionId) {
+        child.stdin?.write(rpcRequest("session/load", { sessionId: resumeSessionId }));
+      } else {
+        const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
+        if (model) params.model = model;
+        child.stdin?.write(rpcRequest("session/new", params));
+      }
       return;
     }
 
