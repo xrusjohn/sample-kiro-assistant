@@ -5,6 +5,11 @@
 - [ ] Show a loading/spinner indicator while ACP initializes and MCP servers load
 - [ ] Better formatting for tool calls (show params, status, duration)
 
+## Prompt & Input
+- [ ] Customizable prompt display — show timestamp, current working directory, session info
+- [ ] Interactive vs non-interactive toggle per session (trust-all-tools vs ask-before-running)
+- [ ] Per-session settings (model, MCP config) vs global settings
+
 ## MCP Servers
 - [ ] Hot-reload MCP config mid-session (investigate ACP `session/set_mode` or restart ACP process)
 - [ ] Show MCP server initialization status in the UI during session startup
