@@ -150,13 +150,9 @@ export function createAcpRunner(opts: {
   const handleMessage = (msg: any) => {
     // Response to initialize
     if (msg.id && msg.result?.agentInfo) {
-      if (resumeSessionId) {
-        child.stdin?.write(rpcRequest("session/load", { sessionId: resumeSessionId }));
-      } else {
-        const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
-        if (model) params.model = model;
-        child.stdin?.write(rpcRequest("session/new", params));
-      }
+      const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
+      if (model) params.model = model;
+      child.stdin?.write(rpcRequest("session/new", params));
       return;
     }
 
