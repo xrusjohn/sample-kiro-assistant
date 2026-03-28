@@ -65,6 +65,7 @@ export function createAcpRunner(opts: {
   let accumulatedText = "";
   let pendingPrompt: string | null = null;
   let readyResolve: () => void;
+  const toolsUsedThisTurn = new Set<string>();
   const ready = new Promise<void>((resolve) => { readyResolve = resolve; });
 
   // --- Streaming helpers ---
@@ -79,6 +80,19 @@ export function createAcpRunner(opts: {
   };
 
   const finishTurn = () => {
+    // Inject widgets based on tools used this turn
+    const tick = "`";
+    const widgetMap: Record<string, string> = {
+      "calendar_view": `\n\n${tick}${tick}${tick}widget:clock\n{}\n${tick}${tick}${tick}\n`,
+      "calendar_availability": `\n\n${tick}${tick}${tick}widget:clock\n{}\n${tick}${tick}${tick}\n`,
+    };
+    for (const tool of toolsUsedThisTurn) {
+      for (const [pattern, widget] of Object.entries(widgetMap)) {
+        if (tool.includes(pattern)) { emitDelta(widget); break; }
+      }
+    }
+    toolsUsedThisTurn.clear();
+
     if (streamingStarted) {
       onEvent({ type: "stream.message", payload: { sessionId: session.id, message: { type: "stream_event", event: { type: "content_block_stop" } } as any } });
       streamingStarted = false;
@@ -105,6 +119,7 @@ export function createAcpRunner(opts: {
     if (!acpSessionId || !child.stdin?.writable) return;
     accumulatedText = "";
     streamingStarted = false;
+    toolsUsedThisTurn.clear();
     onEvent({ type: "session.status", payload: { sessionId: session.id, status: "running", title: session.title, cwd: session.cwd } });
 
     let text_ = text;
@@ -151,7 +166,14 @@ export function createAcpRunner(opts: {
       }
 
       if (kind === "tool_call") {
-        emitDelta(`\n\n🛠️ Using tool: **${update.toolName ?? update.name ?? "unknown"}**\n`);
+        const toolName = (update.toolName ?? update.name ?? "unknown");
+        toolsUsedThisTurn.add(toolName.toLowerCase());
+        emitDelta(`\n\n🛠️ Using tool: **${toolName}**\n`);
+        return;
+      }
+
+      if (kind === "tool_call_update") {
+        // Progress updates — skip for now
         return;
       }
 
