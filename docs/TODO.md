@@ -56,6 +56,8 @@
 - [ ] Hot-reload dev mode (Vite dev server proxying to Express for API/WS)
 - [ ] Docker/container packaging for easy deployment
 - [ ] Configurable kiro-cli agent name (currently hardcoded `kiro-assistant`)
+- [ ] Persistent server via systemd service or tmux/screen launcher
+- [ ] CDM setup guide and any platform-specific notes
 
 ## Remote Access
 - [ ] Investigate reverse tunneling for local MCP servers (Windows → remote VM)
