@@ -80,16 +80,10 @@ export function createAcpRunner(opts: {
   };
 
   const finishTurn = () => {
-    // Inject widgets based on tools used this turn
-    const tick = "`";
-    const widgetMap: Record<string, string> = {
-      "calendar_view": `\n\n${tick}${tick}${tick}widget:clock\n{}\n${tick}${tick}${tick}\n`,
-      "calendar_availability": `\n\n${tick}${tick}${tick}widget:clock\n{}\n${tick}${tick}${tick}\n`,
-    };
-    for (const tool of toolsUsedThisTurn) {
-      for (const [pattern, widget] of Object.entries(widgetMap)) {
-        if (tool.includes(pattern)) { emitDelta(widget); break; }
-      }
+    // Inject widgets based on tools used or content patterns
+    const timePattern = /\d{1,2}:\d{2}\s*(AM|PM|UTC|EST|CST|CDT|PST|PDT|GMT)/i;
+    if (timePattern.test(accumulatedText)) {
+      emitDelta("\n\n" + "`" + "`" + "`" + "widget:clock\n{}\n" + "`" + "`" + "`" + "\n");
     }
     toolsUsedThisTurn.clear();
 
