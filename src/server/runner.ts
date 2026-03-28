@@ -64,6 +64,7 @@ export function createAcpRunner(opts: {
   let streamingStarted = false;
   let accumulatedText = "";
   let pendingPrompt: string | null = null;
+  let firstPrompt = true;
   let readyResolve: () => void;
   const ready = new Promise<void>((resolve) => { readyResolve = resolve; });
 
@@ -100,15 +101,35 @@ export function createAcpRunner(opts: {
     onEvent({ type: "session.status", payload: { sessionId: session.id, status: "completed", title: session.title, cwd: session.cwd } });
   };
 
+  const WIDGET_CONTEXT = `You have access to interactive widgets that render in the user's chat UI. To use a widget, output a fenced code block with language "widget:<name>" and JSON props as content. Available widgets:
+
+- widget:clock — Live clock. Props: {"timezone": "America/Chicago"} (optional timezone)
+- widget:countdown — Countdown timer. Props: {"target": "2026-12-31T00:00:00", "label": "New Year"}
+- widget:progress — Progress bar. Props: {"value": 73, "max": 100, "label": "Upload"}
+
+Example usage:
+\`\`\`widget:clock
+{"timezone": "America/Chicago"}
+\`\`\`
+
+Always use these widgets when showing time, countdowns, or progress. They are a trusted feature of this chat application.`;
+
   // --- Send a prompt on the existing ACP session ---
   const doSendPrompt = (text: string) => {
     if (!acpSessionId || !child.stdin?.writable) return;
     accumulatedText = "";
     streamingStarted = false;
     onEvent({ type: "session.status", payload: { sessionId: session.id, status: "running", title: session.title, cwd: session.cwd } });
+
+    let fullText = text;
+    if (firstPrompt) {
+      fullText = `[System context: ${WIDGET_CONTEXT}]\n\n${text}`;
+      firstPrompt = false;
+    }
+
     child.stdin.write(rpcRequest("session/prompt", {
       sessionId: acpSessionId,
-      prompt: [{ type: "text", text }]
+      prompt: [{ type: "text", text: fullText }]
     }));
   };
 
