@@ -42,6 +42,12 @@
 - [ ] Adapt title bar for browser (show connection status, server info)
 - [ ] Mobile-responsive layout
 
+## Widgets
+- [ ] Auto-render widgets from tool results (e.g., time tool → clock widget, calendar tool → calendar widget)
+- [ ] Widget gallery/playground for testing
+- [ ] More widgets: chart, mermaid diagram, diff viewer, image gallery, calendar grid
+- [ ] Agent reliably outputs widget code blocks — may need fine-tuned prompting or tool-result interception
+
 ## File Operations
 - [ ] File upload via drag-and-drop (not just paperclip button)
 - [ ] Server-side file browser for `selectDirectory` (currently returns null)
