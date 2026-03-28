@@ -160,16 +160,24 @@ export function createAcpRunner(opts: {
       return;
     }
 
-    // Response to session/new
-    if (msg.id && msg.result?.sessionId && !acpSessionId) {
-      acpSessionId = msg.result.sessionId;
-      onSessionUpdate?.({ kiroConversationId: acpSessionId! });
-      readyResolve();
-      // Send pending prompt if we have one
-      if (pendingPrompt) {
-        doSendPrompt(pendingPrompt);
-        pendingPrompt = null;
+    // Response to session/new or session/load
+    if (msg.id && msg.result && !acpSessionId) {
+      const sid = msg.result.sessionId ?? resumeSessionId;
+      if (sid) {
+        acpSessionId = sid;
+        onSessionUpdate?.({ kiroConversationId: acpSessionId! });
+        readyResolve();
+        if (pendingPrompt) { doSendPrompt(pendingPrompt); pendingPrompt = null; }
+        return;
       }
+    }
+
+    // session/load failed — fall back to session/new
+    if (msg.error && resumeSessionId && !acpSessionId) {
+      console.warn("[kiro-acp] session/load failed, falling back:", msg.error.message ?? msg.error);
+      const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
+      if (model) params.model = model;
+      child.stdin?.write(rpcRequest("session/new", params));
       return;
     }
 
