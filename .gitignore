@@ -25,3 +25,10 @@ dist-electron
 *.sw?
 
 .env
+# Server build output
+dist-server/
+
+# Test files
+test-acp.cjs
+server.log
+start-server.sh

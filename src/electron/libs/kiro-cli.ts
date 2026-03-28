@@ -69,6 +69,10 @@ export const resolveKiroSupportDirectory = (): string | undefined => {
     if (process.platform === "win32") {
       return join(home, "AppData", "Roaming", "kiro-cli");
     }
+    // Linux: check XDG data dir first, then fallback
+    const xdg = process.env.XDG_DATA_HOME || join(home, ".local", "share");
+    const xdgPath = join(xdg, "kiro-cli");
+    if (existsSync(xdgPath)) return xdgPath;
     return join(home, ".kiro-cli");
   })();
   cachedPaths.supportDir = existingPath(supportDir);

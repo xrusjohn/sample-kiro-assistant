@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "../../dist-server",
+    "rootDir": "../",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": [
+    "./**/*.ts",
+    "../electron/libs/kiro-cli.ts",
+    "../electron/libs/kiro-conversation.ts",
+    "../electron/libs/kiro-message-adapter.ts",
+    "../electron/libs/session-store.ts",
+    "../electron/libs/mcp-config.ts",
+    "../electron/libs/workspace.ts",
+    "../electron/libs/skill-loader.ts",
+    "../electron/types.ts",
+    "../shared/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

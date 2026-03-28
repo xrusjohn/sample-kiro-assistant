@@ -3,7 +3,7 @@ import type { ServerEvent, ClientEvent } from "../types";
 
 export function useIPC(onEvent: (event: ServerEvent) => void) {
   const connected =
-    typeof window !== "undefined" && typeof window.electron?.onServerEvent === "function";
+    typeof window !== "undefined" && typeof window.electron?.sendClientEvent === "function";
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {

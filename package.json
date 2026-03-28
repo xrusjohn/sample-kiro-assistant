@@ -15,7 +15,10 @@
 		"transpile:electron": "./node_modules/.bin/tsc --project src/electron/tsconfig.json && mkdir -p dist-electron/shared && cp src/shared/models.json dist-electron/shared/models.json",
 		"dist:mac": "bun run transpile:electron && bun run build && bunx electron-builder --mac --arm64",
 		"dist:win": "bun run transpile:electron && bun run build && electron-builder --win --x64",
-		"dist:linux": "bun run transpile:electron && bun run build && electron-builder --linux --x64"
+		"dist:linux": "bun run transpile:electron && bun run build && electron-builder --linux --x64",
+		"build:web": "vite build && npx tsc --project src/server/tsconfig.json && cp src/shared/models.json dist-server/shared/models.json",
+		"server": "node dist-server/server/index.js",
+		"dev:web": "vite build && npx tsc --project src/server/tsconfig.json && cp src/shared/models.json dist-server/shared/models.json && node dist-server/server/index.js"
 	},
 	"dependencies": {
 		"@anthropic-ai/claude-agent-sdk": "^0.2.6",
@@ -24,7 +27,9 @@
 		"@tailwindcss/vite": "^4.1.18",
 		"better-sqlite3": "^12.6.0",
 		"dotenv": "^17.2.3",
+		"express": "^5.2.1",
 		"highlight.js": "^11.11.1",
+		"multer": "^2.1.1",
 		"os-utils": "^0.0.14",
 		"react": "^19.2.3",
 		"react-dom": "^19.2.3",
@@ -34,6 +39,7 @@
 		"remark-gfm": "^4.0.1",
 		"tailwindcss": "^4.1.18",
 		"vite-tsconfig-paths": "^6.0.3",
+		"ws": "^8.20.0",
 		"xlsx": "^0.18.5",
 		"yauzl": "^2.10.0",
 		"zustand": "^5.0.10"
@@ -41,9 +47,12 @@
 	"devDependencies": {
 		"@eslint/js": "^9.39.2",
 		"@types/better-sqlite3": "^7.6.13",
+		"@types/express": "^5.0.6",
+		"@types/multer": "^2.1.0",
 		"@types/os-utils": "^0.0.4",
 		"@types/react": "^19.2.7",
 		"@types/react-dom": "^19.2.3",
+		"@types/ws": "^8.18.1",
 		"@vitejs/plugin-react": "^5.1.2",
 		"cross-env": "^10.1.0",
 		"electron": "^39.2.7",
