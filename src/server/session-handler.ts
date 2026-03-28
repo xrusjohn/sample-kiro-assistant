@@ -80,10 +80,12 @@ export function handleClientEvent(event: ClientEvent) {
       // No runner — server was restarted. Spin up a new ACP process.
       const modelId = resolveModelId();
       session.selectedModel = modelId;
+      const history = sessions.getSessionHistory(session.id);
       handle = createAcpRunner({
         session: session as any,
         model: modelId,
         resumeSessionId: session.kiroConversationId || undefined,
+        history: history?.messages ?? [],
         onEvent: emit,
         onSessionUpdate: (u) => sessions.updateSession(session.id, u)
       });

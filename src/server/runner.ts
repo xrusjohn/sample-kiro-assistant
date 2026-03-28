@@ -40,6 +40,7 @@ export function createAcpRunner(opts: {
   session: Session;
   model: string;
   resumeSessionId?: string;
+  history?: any[];
   onEvent: EmitFn;
   onSessionUpdate?: (updates: Partial<Session>) => void;
 }): RunnerHandle {
@@ -65,6 +66,7 @@ export function createAcpRunner(opts: {
   let streamingStarted = false;
   let accumulatedText = "";
   let pendingPrompt: string | null = null;
+  let firstPrompt = true;
   let readyResolve: () => void;
   const toolsUsedThisTurn = new Set<string>();
   const ready = new Promise<void>((resolve) => { readyResolve = resolve; });
@@ -139,10 +141,29 @@ export function createAcpRunner(opts: {
     toolsUsedThisTurn.clear();
     onEvent({ type: "session.status", payload: { sessionId: session.id, status: "running", title: session.title, cwd: session.cwd } });
 
-    let text_ = text;
+    // On first prompt of a resumed session, inject conversation history
+    let fullText = text;
+    if (firstPrompt && opts.history?.length) {
+      const summary = opts.history.map(m => {
+        if (m.type === "user_prompt") return `User: ${m.prompt}`;
+        if (m.type === "assistant") {
+          const content = m.message?.content;
+          if (Array.isArray(content)) {
+            const text = content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
+            if (text) return `Assistant: ${text.slice(0, 500)}`;
+          }
+        }
+        return null;
+      }).filter(Boolean).join("\n\n");
+      if (summary) {
+        fullText = `[Previous conversation for context:\n${summary}\n]\n\n${text}`;
+      }
+    }
+    firstPrompt = false;
+
     child.stdin.write(rpcRequest("session/prompt", {
       sessionId: acpSessionId,
-      prompt: [{ type: "text", text: text_ }]
+      prompt: [{ type: "text", text: fullText }]
     }));
   };
 
