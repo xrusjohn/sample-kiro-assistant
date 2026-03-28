@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
+import { isWidgetLanguage, renderWidget } from "../widgets";
 
 export default function MDContent({ text }: { text: string }) {
   return (
@@ -61,6 +62,8 @@ export default function MDContent({ text }: { text: string }) {
         ),
         code: (props) => {
           const { children, className, ...rest } = props;
+          const widget = isWidgetLanguage(className);
+          if (widget) return renderWidget(widget.name, String(children));
           const match = /language-(\w+)/.exec(className || "");
           const isInline = !match && !String(children).includes("\n");
 
