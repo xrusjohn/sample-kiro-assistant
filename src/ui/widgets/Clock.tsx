@@ -15,11 +15,11 @@ export function ClockWidget({ timezone }: { timezone?: string }) {
   });
 
   return (
-    <div className="my-3 inline-flex items-center gap-3 rounded-xl border border-accent/30 bg-accent/5 px-5 py-3">
+    <div className="my-3 inline-flex items-center gap-3 rounded-xl border border-accent/30 bg-white/80 px-5 py-3 shadow-sm">
       <span className="text-2xl">🕐</span>
       <div>
-        <div className="text-lg font-mono font-semibold text-ink-900">{fmt.format(time)}</div>
-        {timezone && <div className="text-xs text-muted">{timezone}</div>}
+        <div className="text-lg font-mono font-semibold text-gray-800">{fmt.format(time)}</div>
+        {timezone && <div className="text-xs text-gray-500">{timezone}</div>}
       </div>
     </div>
   );
