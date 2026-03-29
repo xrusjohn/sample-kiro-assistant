@@ -28,7 +28,11 @@ function emit(event: ServerEvent) {
 
 export function handleClientEvent(event: ClientEvent) {
   if (event.type === "session.list") {
-    emit({ type: "session.list", payload: { sessions: sessions.listSessions() } });
+    const list = sessions.listSessions().map(s => {
+      const entry = manager.get(s.id);
+      return { ...s, hasRunner: !!entry && entry.state !== "suspended" };
+    });
+    emit({ type: "session.list", payload: { sessions: list } });
     return;
   }
 

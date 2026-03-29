@@ -29,6 +29,7 @@ export type SessionView = {
   createdFiles: CreatedFile[];
   contextUsagePercent?: number;
   creditsUsed?: number;
+  hasRunner?: boolean;
 };
 
 export type AcpDebugEntry = {
@@ -409,7 +410,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             title: session.title,
             cwd: session.cwd,
             createdAt: session.createdAt,
-            updatedAt: session.updatedAt
+            updatedAt: session.updatedAt,
+            hasRunner: session.hasRunner
           };
         }
 
@@ -472,6 +474,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 title: title ?? existing.title,
                 cwd: cwd ?? existing.cwd,
                 updatedAt: Date.now(),
+                hasRunner: status === "running" ? true : existing.hasRunner,
                 createdFiles: shouldResetFiles ? [] : existing.createdFiles
               }
             }

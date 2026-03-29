@@ -28,6 +28,7 @@ export type SessionInfo = {
   cwd?: string;
   createdAt: number;
   updatedAt: number;
+  hasRunner?: boolean;
 };
 
 // Server -> Client events

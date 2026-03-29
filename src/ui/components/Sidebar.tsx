@@ -116,13 +116,13 @@ export function Sidebar({
                     {(() => {
                       // 🔴 red = error
                       // 🟠 amber = agent busy (running, no permission request)
-                      // 🔵 blue = your turn (idle/completed, or running + waiting on permission)
-                      // ⚫ gray = disconnected / unknown
+                      // 🔵 blue = your turn (idle/completed with live runner)
+                      // ⚫ gray = no runner (disconnected / suspended)
                       const waitingOnUser = session.status === "running" && session.permissionRequests.length > 0;
                       const dotClass = session.status === "error" ? "bg-red-500" :
                         waitingOnUser ? "bg-blue-400" :
                         session.status === "running" ? "bg-amber-400 animate-pulse" :
-                        (session.status === "idle" || session.status === "completed") ? "bg-blue-400" :
+                        (session.status === "idle" || session.status === "completed") && session.hasRunner ? "bg-blue-400" :
                         "bg-slate-400";
                       return <span className={`inline-block w-2 h-2 rounded-full mr-1.5 align-middle ${dotClass}`} />;
                     })()}
