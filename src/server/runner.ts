@@ -1,9 +1,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { enhancedEnv, normalizeWorkingDirectory } from "./util.js";
-import { resolveKiroCliBinary } from "../electron/libs/kiro-cli.js";
 import { addPid, removePid } from "./pid-tracker.js";
 import type { ServerEvent } from "../electron/types.js";
 import type { Session } from "../electron/libs/session-store.js";
+import type { AgentDefinition } from "./agent-registry.js";
 
 export type { Session };
 
@@ -40,23 +40,23 @@ function parseMessages(buffer: string): { messages: any[]; remainder: string } {
 export function createAcpRunner(opts: {
   session: Session;
   model: string;
+  agent: AgentDefinition;
   resumeSessionId?: string;
   history?: any[];
   onEvent: EmitFn;
   onSessionUpdate?: (updates: Partial<Session>) => void;
 }): RunnerHandle {
-  const { session, model, resumeSessionId, onEvent, onSessionUpdate } = opts;
-  const binary = resolveKiroCliBinary();
+  const { session, model, agent, resumeSessionId, onEvent, onSessionUpdate } = opts;
+  const binary = agent.resolvedBinary;
   const normalizedCwd = normalizeWorkingDirectory(session.cwd) ?? DEFAULT_CWD;
 
   if (!binary) {
-    onEvent({ type: "runner.error", payload: { sessionId: session.id, message: "Could not find kiro-cli on PATH." } });
-    onEvent({ type: "session.status", payload: { sessionId: session.id, status: "error", title: session.title, cwd: session.cwd, error: "kiro-cli not found" } });
+    onEvent({ type: "runner.error", payload: { sessionId: session.id, message: `${agent.label} binary not found — install ${agent.label} CLI and try again.` } });
+    onEvent({ type: "session.status", payload: { sessionId: session.id, status: "error", title: session.title, cwd: session.cwd, error: `${agent.label} binary not found` } });
     return { abort() {}, sendPrompt() {}, ready: Promise.reject(new Error("no binary")) };
   }
 
-  const agent = (process.env.KIRO_AGENT ?? "kiro-assistant").trim();
-  const child: ChildProcess = spawn(binary, ["acp", "--agent", agent, "--trust-all-tools"], {
+  const child: ChildProcess = spawn(binary, agent.defaultArgs, {
     cwd: normalizedCwd,
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...enhancedEnv, NO_COLOR: "1", CLICOLOR: "0", KIRO_CLI_DISABLE_PAGER: "1" }
@@ -277,7 +277,7 @@ export function createAcpRunner(opts: {
   child.on("close", (code) => {
     if (child.pid) removePid(child.pid);
     if (!aborted && code !== 0) {
-      onEvent({ type: "session.status", payload: { sessionId: session.id, status: "error", title: session.title, cwd: session.cwd, error: `kiro-cli exited with code ${code}` } });
+      onEvent({ type: "session.status", payload: { sessionId: session.id, status: "error", title: session.title, cwd: session.cwd, error: `${agent.label} exited with code ${code}` } });
     }
   });
 

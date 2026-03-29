@@ -126,6 +126,61 @@ The tool interface is the same — just the URI scheme changes:
 4. Can we use S3 Object Lambda for on-the-fly thumbnailing?
 5. How does the agent reference artifacts in conversation? ("the diagram I just made" → needs session state)
 
+## MCP-Native Approach (Preferred)
+
+MCP already has the building blocks — we don't need to invent a claim check pattern.
+
+### Resources with URIs
+MCP resources are identified by URI. `s3://` or `https://` (pre-signed) URIs
+work natively. The tool returns a resource reference, not the bytes.
+
+### Audience annotations
+MCP supports `annotations.audience` on content blocks:
+- `["user"]` — show to the user (full-res image via pre-signed URL)
+- `["assistant"]` — include in agent context (thumbnail, small)
+- `["user", "assistant"]` — both see it
+
+This IS the thumbnail pattern, built into the protocol:
+
+```json
+{
+  "content": [
+    {"type": "text", "text": "✓ Diagram rendered: arch.png (201KB)"},
+    {
+      "type": "resource",
+      "resource": {
+        "uri": "https://kiro-artifacts.s3.amazonaws.com/session/arch.png?X-Amz-...",
+        "mimeType": "image/png",
+        "annotations": {"audience": ["user"]}
+      }
+    },
+    {
+      "type": "image",
+      "data": "<20KB thumbnail base64>",
+      "mimeType": "image/png",
+      "annotations": {"audience": ["assistant"]}
+    }
+  ]
+}
+```
+
+### Resource subscriptions
+Client can subscribe to a resource URI and get notified on change.
+The UI auto-refreshes when the agent re-renders a diagram.
+
+### What this means
+- No custom claim check pattern needed
+- No external dependency beyond S3 (which we need anyway for persistence)
+- Protocol handles routing: user sees full res, agent sees thumbnail
+- Tools return URIs + thumbnails, not giant base64 blobs
+- Fully spec-compliant, will work with any MCP client
+
+### Caveat
+ACP/kiro-cli may not implement all MCP resource features yet.
+Need to verify: does kiro-cli honor audience annotations?
+Does it render resource URIs in the UI? If not, we fall back to
+the simpler approach (tool returns thumbnail + saves full res to disk).
+
 ## Next Steps
 
 - [ ] Create the S3 bucket (kiro-artifacts)

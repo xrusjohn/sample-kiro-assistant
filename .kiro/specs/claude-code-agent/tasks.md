@@ -18,12 +18,12 @@
 
 ## Phase 2: Runner & Session Model
 
-- [ ] 2a. Update `src/server/runner.ts` — `createAcpRunner()` accepts `agent: AgentDefinition`
+- [x] 2a. Update `src/server/runner.ts` — `createAcpRunner()` accepts `agent: AgentDefinition`
   - Replace hard-coded `kiro-cli` binary and args with `agent.resolvedBinary` and `agent.defaultArgs`
   - Update error messages (e.g., `child.on("close")`) to use agent label instead of hard-coded "kiro-cli"
   - Legacy `KIRO_AGENT` and `KIRO_CLI_BINARY` reads removed from runner (handled by AgentRegistry fallback)
 
-- [ ] 2b. Add `agent_id` column to sessions DB table in `src/electron/libs/session-store.ts`
+- [-] 2b. Add `agent_id` column to sessions DB table in `src/electron/libs/session-store.ts`
   - Migration using existing pattern: `pragma table_info` check, then `ALTER TABLE sessions ADD COLUMN agent_id TEXT NOT NULL DEFAULT 'kiro'`
   - Update `Session` and `StoredSession` TypeScript types to include `agentId: string`
   - Update `createSession()`, `loadSessions()`, `getSession()`, and `persistSession()` to read/write `agent_id`

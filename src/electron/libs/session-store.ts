@@ -19,6 +19,7 @@ export type Session = {
   lastPrompt?: string;
   interactive?: boolean;
   selectedModel?: string;
+  agentId: string;
   pendingPermissions: Map<string, PendingPermission>;
   abortController?: AbortController;
 };
@@ -32,6 +33,7 @@ export type StoredSession = {
   lastPrompt?: string;
   kiroConversationId?: string;
   kiroHistoryCursor?: number;
+  agentId: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -51,7 +53,7 @@ export class SessionStore {
     this.loadSessions();
   }
 
-  createSession(options: { cwd?: string; allowedTools?: string; prompt?: string; title: string; interactive?: boolean }): Session {
+  createSession(options: { cwd?: string; allowedTools?: string; prompt?: string; title: string; interactive?: boolean; agentId?: string }): Session {
     const id = crypto.randomUUID();
     const now = Date.now();
     const session: Session = {
@@ -63,14 +65,15 @@ export class SessionStore {
       lastPrompt: options.prompt,
       interactive: options.interactive ?? false,
       kiroHistoryCursor: 0,
+      agentId: options.agentId ?? "kiro",
       pendingPermissions: new Map()
     };
     this.sessions.set(id, session);
     this.db
       .prepare(
         `insert into sessions
-          (id, title, claude_session_id, kiro_conversation_id, kiro_history_cursor, status, cwd, allowed_tools, last_prompt, created_at, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          (id, title, claude_session_id, kiro_conversation_id, kiro_history_cursor, status, cwd, allowed_tools, last_prompt, agent_id, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -82,6 +85,7 @@ export class SessionStore {
         session.cwd ?? null,
         session.allowedTools ?? null,
         session.lastPrompt ?? null,
+        session.agentId,
         now,
         now
       );
