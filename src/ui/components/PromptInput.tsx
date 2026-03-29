@@ -12,7 +12,7 @@ interface PromptInputProps {
 
 export function PromptInput({ actions }: PromptInputProps) {
   const effectiveCwd = useEffectiveCwd();
-  const { sendPrompt, handleStop, isRunning } = actions;
+  const { sendPrompt, handleStop, isRunning, isConnecting } = actions;
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const [prompt, setPrompt] = useState("");
   const [uploadMessage, setUploadMessage] = useState<{ text: string; variant: "success" | "error" } | null>(null);
@@ -52,6 +52,7 @@ export function PromptInput({ actions }: PromptInputProps) {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key !== "Enter" || e.shiftKey) return;
     e.preventDefault();
+    if (isConnecting) return;
     if (isRunning) {
       handleStop();
       return;
@@ -113,11 +114,14 @@ export function PromptInput({ actions }: PromptInputProps) {
             </svg>
           </button>
           <button
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${isRunning ? "bg-error text-white hover:bg-error/90" : "bg-accent text-white hover:bg-accent-hover"}`}
-            onClick={isRunning ? handleStop : handleSend}
-            aria-label={isRunning ? "Stop session" : "Send prompt"}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${isConnecting ? "bg-amber-400 text-white cursor-wait" : isRunning ? "bg-error text-white hover:bg-error/90" : "bg-accent text-white hover:bg-accent-hover"}`}
+            onClick={isConnecting ? undefined : isRunning ? handleStop : handleSend}
+            disabled={isConnecting}
+            aria-label={isConnecting ? "Connecting..." : isRunning ? "Stop session" : "Send prompt"}
           >
-            {isRunning ? (
+            {isConnecting ? (
+              <svg viewBox="0 0 24 24" className="h-4 w-4 animate-spin" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="42" strokeLinecap="round" /></svg>
+            ) : isRunning ? (
               <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg>
             ) : (
               <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true"><path d="M3.4 20.6 21 12 3.4 3.4l2.8 7.2L16 12l-9.8 1.4-2.8 7.2Z" fill="currentColor" /></svg>

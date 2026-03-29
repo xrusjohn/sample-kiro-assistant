@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import type { ClientEvent } from "../types";
 import { useAppStore } from "../store/useAppStore";
 import { PROMPT_SUBMIT_EVENT } from "../constants";
@@ -10,6 +10,7 @@ export type PromptActions = {
   handleStop: () => void;
   handleStartFromModal: () => void;
   isRunning: boolean;
+  isConnecting: boolean;
 };
 
 export function usePromptActions(sendEvent: (event: ClientEvent) => void): PromptActions {
@@ -25,6 +26,12 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void): Promp
 
   const activeSession = activeSessionId ? sessions[activeSessionId] : undefined;
   const isRunning = activeSession?.status === "running";
+  const [connecting, setConnecting] = useState(false);
+
+  // Clear connecting when session starts running or errors
+  useEffect(() => {
+    if (isRunning || activeSession?.status === "error") setConnecting(false);
+  }, [isRunning, activeSession?.status]);
 
   const runSlashCommand = useCallback(
     async (raw: string) => {
@@ -101,6 +108,7 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void): Promp
           type: "session.continue",
           payload: { sessionId: activeSessionId, prompt, interactive: cliInteractive }
         });
+        setConnecting(true);
       }
     },
     [activeSessionId, cliInteractive, isRunning, runSlashCommand, sendEvent, setGlobalError, setPendingStart]
@@ -122,5 +130,5 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void): Promp
     setShowStartModal(false);
   }, [sendPrompt, setShowStartModal, setStartPrompt, startPrompt]);
 
-  return { sendPrompt, handleStop, handleStartFromModal, isRunning };
+  return { sendPrompt, handleStop, handleStartFromModal, isRunning, isConnecting: connecting };
 }
