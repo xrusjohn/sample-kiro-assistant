@@ -28,6 +28,7 @@ export type SessionView = {
   hydrated: boolean;
   createdFiles: CreatedFile[];
   contextUsagePercent?: number;
+  creditsUsed?: number;
 };
 
 export type AcpDebugEntry = {
@@ -592,11 +593,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       case "session.metadata": {
-        const { sessionId, contextUsagePercent } = event.payload;
+        const { sessionId, contextUsagePercent, creditsUsed } = event.payload;
         set((state) => {
           const existing = state.sessions[sessionId];
           if (!existing) return {};
-          return { sessions: { ...state.sessions, [sessionId]: { ...existing, contextUsagePercent } } };
+          return { sessions: { ...state.sessions, [sessionId]: {
+            ...existing,
+            ...(contextUsagePercent != null && { contextUsagePercent }),
+            ...(creditsUsed != null && { creditsUsed: Math.round(((existing.creditsUsed ?? 0) + creditsUsed) * 1000) / 1000 }),
+          } } };
         });
         break;
       }

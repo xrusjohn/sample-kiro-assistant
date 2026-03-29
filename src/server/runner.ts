@@ -230,12 +230,17 @@ export function createAcpRunner(opts: {
     // Response to session/prompt (stopReason)
     if (msg.id && msg.result?.stopReason) { finishTurn(); return; }
 
-    // Kiro metadata (context usage)
+    // Kiro metadata (context usage, credits, turn duration)
     if (msg.method === "_kiro.dev/metadata" && msg.params) {
-      const ctx = msg.params.contextUsagePercentage;
-      if (typeof ctx === "number") {
-        onEvent({ type: "session.metadata", payload: { sessionId: session.id, contextUsagePercent: Math.round(ctx) } } as any);
+      const p = msg.params;
+      const meta: Record<string, unknown> = { sessionId: session.id };
+      if (typeof p.contextUsagePercentage === "number") meta.contextUsagePercent = Math.round(p.contextUsagePercentage);
+      if (Array.isArray(p.meteringUsage)) {
+        const credit = p.meteringUsage.find((m: any) => m.unit === "credit");
+        if (credit) meta.creditsUsed = Math.round(credit.value * 1000) / 1000;
       }
+      if (typeof p.turnDurationMs === "number") meta.turnDurationMs = p.turnDurationMs;
+      onEvent({ type: "session.metadata", payload: meta } as any);
       return;
     }
 

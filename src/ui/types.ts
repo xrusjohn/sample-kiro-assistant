@@ -44,7 +44,7 @@ export type ServerEvent =
   | { type: "session.deleted"; payload: { sessionId: string } }
   | { type: "permission.request"; payload: { sessionId: string; toolUseId: string; toolName: string; input: unknown } }
   | { type: "runner.error"; payload: { sessionId?: string; message: string } }
-  | { type: "session.metadata"; payload: { sessionId: string; contextUsagePercent: number } }
+  | { type: "session.metadata"; payload: { sessionId: string; contextUsagePercent?: number; creditsUsed?: number; turnDurationMs?: number } }
   | { type: "debug.acp"; payload: { sessionId?: string; direction: "send" | "recv"; message: string; timestamp: number } };
 
 // Client -> Server events

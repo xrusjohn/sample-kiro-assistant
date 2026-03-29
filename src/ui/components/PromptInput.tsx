@@ -23,6 +23,7 @@ export function PromptInput({ actions }: PromptInputProps) {
   const activeSession = useAppStore((s) => activeSessionId ? s.sessions[activeSessionId] : undefined);
   const sessionCwd = activeSession?.cwd;
   const contextPercent = activeSession?.contextUsagePercent;
+  const creditsUsed = activeSession?.creditsUsed;
 
   useEffect(() => {
     fetch("/api/model-settings").then(r => r.json()).then(d => {
@@ -128,6 +129,7 @@ export function PromptInput({ actions }: PromptInputProps) {
             <div className="flex items-center gap-2 text-[11px] text-muted font-mono">
               {modelLabel && <span className="text-ink-500">Kiro · {modelLabel}</span>}
               {contextPercent != null && <span title={`Context: ${contextPercent}%`}>{contextIcon(contextPercent)} {contextPercent}%</span>}
+              {creditsUsed != null && <span title="Credits used this session">💰 {creditsUsed}</span>}
               {sessionCwd && <span className="text-ink-400">{formatCwd(sessionCwd)}</span>}
             </div>
           </div>
