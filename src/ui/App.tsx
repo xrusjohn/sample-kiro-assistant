@@ -15,6 +15,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { usePromptActions } from "./hooks/usePromptActions";
 import kiroVideo from "../../kiro.mp4";
 import AcpDebugPanel from "./components/AcpDebugPanel";
+import { onConnectionStatus } from "./api";
 import promptStartSound from "./assets/on_it.mp3";
 import promptDoneSound from "./assets/done.mp3";
 import { PROMPT_SUBMIT_EVENT } from "./constants";
@@ -201,6 +202,10 @@ function App() {
   const pendingStart = useAppStore((s) => s.pendingStart);
   const debugPanelOpen = useAppStore((s) => s.debugPanelOpen);
   const setDebugPanelOpen = useAppStore((s) => s.setDebugPanelOpen);
+
+  // Connection status
+  const [wsStatus, setWsStatus] = useState<"connected" | "reconnecting" | "disconnected">("disconnected");
+  useEffect(() => onConnectionStatus(setWsStatus), []);
 
   // File sidebar state
   const fileSidebarOpen = useAppStore((s) => s.fileSidebarOpen);
@@ -430,6 +435,12 @@ function App() {
         className="flex flex-1 flex-col ml-[280px] bg-surface-cream transition-all duration-200"
         style={{ marginRight: (fileSidebarOpen ? fileSidebarWidth : 0) + (debugPanelOpen ? 420 : 0) }}
       >
+        {wsStatus === "reconnecting" && (
+          <div className="flex items-center justify-center gap-2 bg-amber-100 border-b border-amber-300 px-4 py-1.5 text-xs text-amber-800">
+            <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            Reconnecting to server…
+          </div>
+        )}
         <div 
           className="flex items-center justify-between h-12 border-b border-ink-900/10 bg-surface-cream select-none px-4"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}

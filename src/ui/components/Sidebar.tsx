@@ -31,9 +31,9 @@ export function Sidebar({
 
   const formatCwd = (cwd?: string) => {
     if (!cwd) return "Working dir unavailable";
-    const parts = cwd.split(/[\\/]+/).filter(Boolean);
-    const tail = parts.slice(-2).join("/");
-    return `/${tail || cwd}`;
+    // Strip /workspace-kiro-assistant prefix, keep the task folder name
+    const stripped = cwd.replace(/^.*\/workspace-kiro-assistant\//, "");
+    return stripped || cwd;
   };
 
   const sessionList = useMemo(() => {
@@ -112,15 +112,19 @@ export function Sidebar({
                     onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
-                  <div className={`text-[12px] font-medium ${session.status === "running" ? "text-info" : session.status === "completed" ? "text-success" : session.status === "error" ? "text-error" : "text-ink-800"}`}>
+                  <div className="text-[12px] font-medium text-ink-800">
                     {(() => {
-                      const needsAttention = session.status === "running" && session.permissionRequests.length > 0;
-                      const dotClass = needsAttention ? "bg-orange-500 animate-pulse" :
-                        session.status === "running" ? "bg-emerald-500 animate-pulse" :
-                        session.status === "idle" ? "bg-amber-400" :
-                        session.status === "error" ? "bg-red-500" :
-                        "bg-slate-300";
-                      return <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${dotClass}`} />;
+                      // 🔴 red = error
+                      // 🟠 amber = agent busy (running, no permission request)
+                      // 🔵 blue = your turn (idle/completed, or running + waiting on permission)
+                      // ⚫ gray = disconnected / unknown
+                      const waitingOnUser = session.status === "running" && session.permissionRequests.length > 0;
+                      const dotClass = session.status === "error" ? "bg-red-500" :
+                        waitingOnUser ? "bg-blue-400" :
+                        session.status === "running" ? "bg-amber-400 animate-pulse" :
+                        (session.status === "idle" || session.status === "completed") ? "bg-blue-400" :
+                        "bg-slate-400";
+                      return <span className={`inline-block w-2 h-2 rounded-full mr-1.5 align-middle ${dotClass}`} />;
                     })()}
                     {session.title}
                   </div>

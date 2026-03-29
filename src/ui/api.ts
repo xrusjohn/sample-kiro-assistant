@@ -25,11 +25,27 @@ const listeners = new Set<Listener>();
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingMessages: string[] = [];
+let reconnectDelay = 1000;
+let connectionStatus: "connected" | "reconnecting" | "disconnected" = "disconnected";
+const statusListeners = new Set<(status: typeof connectionStatus) => void>();
+
+export function onConnectionStatus(fn: (status: "connected" | "reconnecting" | "disconnected") => void) {
+  statusListeners.add(fn);
+  fn(connectionStatus);
+  return () => { statusListeners.delete(fn); };
+}
+
+function setStatus(s: typeof connectionStatus) {
+  connectionStatus = s;
+  for (const fn of statusListeners) fn(s);
+}
 
 function connectWs() {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   ws = new WebSocket(`${proto}//${window.location.host}/ws`);
   ws.onopen = () => {
+    reconnectDelay = 1000;
+    setStatus("connected");
     // Flush any queued messages
     for (const msg of pendingMessages) ws!.send(msg);
     pendingMessages = [];
@@ -43,7 +59,14 @@ function connectWs() {
     } catch { /* ignore bad frames */ }
   };
   ws.onclose = () => {
-    if (!reconnectTimer) reconnectTimer = setTimeout(() => { reconnectTimer = null; connectWs(); }, 1000);
+    setStatus("reconnecting");
+    if (!reconnectTimer) {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
+        connectWs();
+      }, reconnectDelay);
+    }
   };
   ws.onerror = () => ws?.close();
 }
