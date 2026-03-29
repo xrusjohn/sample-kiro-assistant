@@ -75,9 +75,11 @@ async function forwardToGateway(request) {
 // stdio JSON-RPC transport
 let buffer = "";
 process.stdin.setEncoding("utf-8");
+let pending = 0;
+let stdinEnded = false;
+
 process.stdin.on("data", (chunk) => {
   buffer += chunk;
-  // Try to parse complete JSON-RPC messages (newline-delimited)
   const lines = buffer.split("\n");
   buffer = lines.pop() || "";
   for (const line of lines) {
@@ -85,7 +87,6 @@ process.stdin.on("data", (chunk) => {
     try {
       const request = JSON.parse(line);
       
-      // Handle initialize locally (MCP handshake)
       if (request.method === "initialize") {
         const response = {
           jsonrpc: "2.0",
@@ -100,18 +101,19 @@ process.stdin.on("data", (chunk) => {
         continue;
       }
 
-      if (request.method === "notifications/initialized") {
-        continue; // no response needed
-      }
+      if (request.method === "notifications/initialized") continue;
 
-      // Forward everything else to the gateway
+      pending++;
       forwardToGateway(request).then((response) => {
         process.stdout.write(JSON.stringify(response) + "\n");
+        pending--;
+        if (stdinEnded && pending === 0) process.exit(0);
       });
-    } catch {
-      // skip malformed lines
-    }
+    } catch {}
   }
 });
 
-process.stdin.on("end", () => process.exit(0));
+process.stdin.on("end", () => {
+  stdinEnded = true;
+  if (pending === 0) process.exit(0);
+});
