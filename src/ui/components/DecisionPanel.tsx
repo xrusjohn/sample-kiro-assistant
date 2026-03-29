@@ -64,7 +64,7 @@ export function DecisionPanel({
   if (request.toolName === "AskUserQuestion" && questions.length > 0) {
     return (
       <div className="rounded-2xl border border-accent/20 bg-accent-subtle p-5">
-        <div className="text-xs font-semibold text-accent">Question from Claude</div>
+        <div className="text-xs font-semibold text-accent">Question from agent</div>
         {questions.map((q, qIndex) => (
           <div key={qIndex} className="mt-4">
             <p className="text-sm text-ink-700">{q.question}</p>

@@ -583,7 +583,7 @@ function App() {
         <div className="fixed bottom-40 left-1/2 z-50 w-[90%] max-w-3xl -translate-x-1/2 rounded-xl border border-ink-900/10 bg-surface-secondary px-4 py-3 shadow-lg">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs font-semibold uppercase text-muted tracking-wide">Claude command</div>
+              <div className="text-xs font-semibold uppercase text-muted tracking-wide">Agent command</div>
               <div className="font-mono text-sm text-ink-900">{commandResult.command}</div>
             </div>
             <button className="text-ink-400 hover:text-ink-700" onClick={() => setCommandResult(null)}>
