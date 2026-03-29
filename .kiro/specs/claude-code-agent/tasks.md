@@ -2,13 +2,13 @@
 
 ## Phase 1: Agent Registry & Server Config
 
-- [-] 1a. Create `src/server/agent-registry.ts` with `AgentDefinition` type and `AgentRegistry` class
+- [x] 1a. Create `src/server/agent-registry.ts` with `AgentDefinition` type and `AgentRegistry` class
   - Define Kiro and Claude Code entries with binary env vars and default args
   - Implement `checkAvailability()` using `which`/`where` (cross-platform) with short TTL cache (~30s)
   - Implement `getAll()`, `get(id)`, `getDefault()` methods
   - Support legacy `KIRO_CLI_BINARY` / `KIRO_AGENT` env vars as fallbacks for the Kiro agent (emit deprecation warning to console)
 
-- [ ] 1b. Add environment variable documentation in `.env.example` or README:
+- [-] 1b. Add environment variable documentation in `.env.example` or README:
   - `KIRO_BINARY`, `CLAUDE_BINARY`, `DEFAULT_AGENT`
   - Mark `KIRO_AGENT` and `KIRO_CLI_BINARY` as deprecated
 

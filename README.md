@@ -257,9 +257,23 @@ Replace_with_your_key field.
 - **FileBar:** Separates created vs accessed files; clicking opens them inline (text/images/PDF/Excel) or via the OS.
 ---
 
+## Environment Variables
+
+Agent binaries and defaults can be configured via environment variables. See [`.env.example`](.env.example) for the full list.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `KIRO_BINARY` | `kiro-cli` | Path to the Kiro CLI binary |
+| `CLAUDE_BINARY` | `claude` | Path to the Claude Code CLI binary |
+| `DEFAULT_AGENT` | `kiro` | Server-side default agent (`kiro` or `claude-code`). UI preference takes precedence. |
+
+> **Deprecated:** `KIRO_CLI_BINARY` and `KIRO_AGENT` still work as fallbacks for the Kiro agent but will be removed in a future release. Use `KIRO_BINARY` instead.
+
+---
+
 ## Troubleshooting Tips
 
-- **Kiro CLI missing:** Ensure `kiro-cli` is installed or set `KIRO_CLI_PATH`.
+- **Kiro CLI missing:** Ensure `kiro-cli` is installed or set `KIRO_BINARY` (see `.env.example`).
 - **MCP server not showing:** Edit `~/.kiro/agents/agent_config.json` and refresh Settings.
 - **Long-running `execute_bash`:** Some commands (e.g., interactive `npx`) block until they finish. You can ask Kiro Assistant to run them without user input.
 - **`better-sqlite3` ABI mismatch:** If you see `...better_sqlite3.node was compiled against NODE_MODULE_VERSION 137... requires NODE_MODULE_VERSION 140`, run `npx electron-rebuild -f -w better-sqlite3` to rebuild the native module against the Electron ABI you have installed.
