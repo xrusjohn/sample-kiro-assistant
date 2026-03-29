@@ -19,7 +19,12 @@
 		"build:web": "vite build && npx tsc --project src/server/tsconfig.json && cp src/shared/models.json dist-server/shared/models.json",
 		"server": "node dist-server/server/index.js",
 		"dev:web": "vite build && npx tsc --project src/server/tsconfig.json && cp src/shared/models.json dist-server/shared/models.json && node dist-server/server/index.js",
-		"dev:web:watch": "vite build --watch & npx tsc --project src/server/tsconfig.json --watch --preserveWatchOutput & cp src/shared/models.json dist-server/shared/models.json && node --watch dist-server/server/index.js"
+		"dev:web:watch": "vite build --watch & npx tsc --project src/server/tsconfig.json --watch --preserveWatchOutput & cp src/shared/models.json dist-server/shared/models.json && node --watch dist-server/server/index.js",
+		"server:start": "./scripts/server.sh start",
+		"server:stop": "./scripts/server.sh stop",
+		"server:restart": "./scripts/server.sh restart",
+		"server:status": "./scripts/server.sh status",
+		"server:logs": "./scripts/server.sh logs"
 	},
 	"dependencies": {
 		"@anthropic-ai/claude-agent-sdk": "^0.2.6",
