@@ -5,8 +5,8 @@ SESSION="kiro-server"
 PORT="${PORT:-3001}"
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Already running?
-if tmux has-session -t "$SESSION" 2>/dev/null; then
+# Already running? (only block 'start')
+if [ "${1:-start}" = "start" ] && tmux has-session -t "$SESSION" 2>/dev/null; then
   echo "✓ $SESSION is already running (port $PORT)"
   echo "  Attach:  tmux attach -t $SESSION"
   echo "  Logs:    tmux capture-pane -t $SESSION -p"
