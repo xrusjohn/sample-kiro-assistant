@@ -186,6 +186,27 @@ app.get("/api/sessions/health", (_req, res) => {
   res.json(manager.getHealth());
 });
 
+// Restart a session's ACP process (picks up new MCP config)
+app.post("/api/sessions/:id/restart", (_req, res) => {
+  const id = _req.params.id;
+  const entry = manager.get(id);
+  if (!entry) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  console.log(`[restart] Destroying ACP for session ${id}...`);
+  manager.destroy(id);
+  res.json({ ok: true, message: "Session destroyed — next message will spawn a fresh ACP process with updated config" });
+});
+
+// Restart all sessions
+app.post("/api/sessions/restart-all", (_req, res) => {
+  const health = manager.getHealth();
+  console.log(`[restart-all] Destroying ${health.activeProcesses} ACP processes...`);
+  manager.abortAll();
+  res.json({ ok: true, destroyed: health.activeProcesses });
+});
+
 app.get("/api/recent-cwds", (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 8, 1), 20);
   res.json(sessions.listRecentCwds(limit));
