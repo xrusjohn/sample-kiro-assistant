@@ -246,6 +246,7 @@ export function Sidebar({
                   const ms = timeToExpiry();
                   if (!ms) return "expired";
                   const min = Math.floor(ms / 60000);
+                  if (min > 60) return `${Math.floor(min / 60)}h ${min % 60}m remaining`;
                   return min > 0 ? `${min}m remaining` : "expiring...";
                 })()}
               </div>
