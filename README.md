@@ -120,10 +120,10 @@ More details (mermaid diagrams, SQLite polling strategy, security notes) live in
 ### Prerequisites
 
 1. **Kiro CLI** installed and authenticated.
-2. **Bun (preferred) or Node.js 18+** for building.
-3. **macOS 13+** (the current build targets macOS; Windows/Linux scripts are stubbed but untested).
+2. **Node.js 18+** for building.
+3. **macOS, Linux, or Windows** (macOS and Linux tested; Windows reported working).
 
-### Steps
+### Option A: macOS Desktop (Electron)
 
 ```bash
 # Clone from AWS Samples Github
@@ -131,13 +131,13 @@ git clone https://github.com/aws-samples/sample-kiro-assistant.git
 cd sample-kiro-assistant
 
 # Install dependencies
-bun install
+npm install
 
 # Development mode (Vite + Electron with hot reload)
-bun run dev
+npm run dev
 
 # Production build (macOS arm64)
-bun run dist:mac
+npm run dist:mac
 ```
 
 The macOS bundle is emitted to `dist/mac-arm64/Kiro Assistant.app`. Copy it into `/Applications` (back up any previous version first).
@@ -153,6 +153,22 @@ sudo ditto "dist/mac-arm64/Kiro Assistant.app" "/Applications/Kiro Assistant.app
 # You can directly run from command line
 open -a "Kiro Assistant"
 ```
+
+### Option B: AgentSpaces / CDM / AL2 (Web Server)
+
+For headless Linux environments — no Electron or display server needed.
+
+```bash
+git clone https://github.com/aws-samples/sample-kiro-assistant.git
+cd sample-kiro-assistant
+npm install
+
+# Build and start the web server
+npm run build:web
+PORT=3001 npm run server
+```
+
+Open `http://localhost:3001` in your browser, or use VS Code / Kiro port forwarding for remote instances. See [docs/WEB_SERVER.md](docs/WEB_SERVER.md) and [docs/dependencies.md](docs/dependencies.md) for full details.
 
 ---
 
@@ -321,7 +337,7 @@ It has many skills for PPTs, Excel, Videos etc. Here is a simple promotional vid
 ## Contributing
 
 1. Fork or clone `https://github.com/aws-samples/sample-kiro-assistant.git`.
-2. Run `bun run dev` for iterative changes.
+2. Run `npm run dev` for iterative changes.
 3. Update docs when touching architecture or UX.
 4. Open a pull request with a clear summary and testing notes.
 ---

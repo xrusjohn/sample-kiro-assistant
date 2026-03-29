@@ -2,7 +2,7 @@
 const { spawn } = require("node:child_process");
 
 const port = process.env.VITE_PORT || process.env.DEV_PORT || "5173";
-const child = spawn("bun", ["x", "vite", "--port", port], {
+const child = spawn("npx", ["vite", "--port", port], {
   stdio: "inherit",
   env: {
     ...process.env,

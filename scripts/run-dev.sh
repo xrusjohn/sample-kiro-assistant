@@ -27,5 +27,5 @@ pkill -f "vite" >/dev/null 2>&1 || true
 pkill -f "electron" >/dev/null 2>&1 || true
 sleep 1
 
-echo "Starting dev server (bun run dev)..."
-VITE_PORT="${PORT}" DEV_PORT="${PORT}" bun run dev
+echo "Starting dev server (npm run dev)..."
+VITE_PORT="${PORT}" DEV_PORT="${PORT}" npm run dev

@@ -19,7 +19,6 @@ export function getEnhancedEnv(): Record<string, string | undefined> {
   const additionalPaths = [
     '/usr/local/bin',
     '/opt/homebrew/bin',
-    `${home}/.bun/bin`,
     `${home}/.local/bin`,
     `${home}/.nvm/versions/node/v20.0.0/bin`,
     `${home}/.nvm/versions/node/v22.0.0/bin`,
