@@ -113,7 +113,13 @@ export function Sidebar({
                   />
                 ) : (
                   <div className={`text-[12px] font-medium ${session.status === "running" ? "text-info" : session.status === "completed" ? "text-success" : session.status === "error" ? "text-error" : "text-ink-800"}`}>
-                    {session.status === "running" && <span className="inline-block w-1.5 h-1.5 rounded-full bg-info mr-1 animate-pulse" />}
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${
+                      session.status === "running" ? "bg-emerald-500 animate-pulse" :
+                      session.status === "idle" ? "bg-amber-400" :
+                      session.status === "completed" ? "bg-slate-400" :
+                      session.status === "error" ? "bg-red-500" :
+                      "bg-slate-300"
+                    }`} />
                     {session.title}
                   </div>
                 )}
