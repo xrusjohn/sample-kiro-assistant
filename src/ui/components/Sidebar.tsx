@@ -7,12 +7,16 @@ interface SidebarProps {
   onNewSession: () => void;
   onDeleteSession: (sessionId: string) => void;
   onOpenSettings: () => void;
+  onToggleDebug: () => void;
+  debugPanelOpen: boolean;
 }
 
 export function Sidebar({
   onNewSession,
   onDeleteSession,
-  onOpenSettings
+  onOpenSettings,
+  onToggleDebug,
+  debugPanelOpen
 }: SidebarProps) {
   const sessions = useAppStore((state) => state.sessions);
   const activeSessionId = useAppStore((state) => state.activeSessionId);
@@ -185,12 +189,24 @@ export function Sidebar({
           </div>
         ))}
       </div>
-      <button
-        className="rounded-xl border border-ink-900/20 bg-surface px-4 py-2.5 text-sm font-medium text-ink-100 hover:border-accent/40 hover:text-accent transition-colors"
-        onClick={onOpenSettings}
-      >
-        ⚙️ Settings
-      </button>
+      <div className="flex gap-2">
+        <button
+          className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+            debugPanelOpen
+              ? "border-accent/40 bg-accent/10 text-accent"
+              : "border-ink-900/20 bg-surface text-ink-100 hover:border-accent/40 hover:text-accent"
+          }`}
+          onClick={onToggleDebug}
+        >
+          🔍 ACP
+        </button>
+        <button
+          className="flex-1 rounded-xl border border-ink-900/20 bg-surface px-4 py-2.5 text-sm font-medium text-ink-100 hover:border-accent/40 hover:text-accent transition-colors"
+          onClick={onOpenSettings}
+        >
+          ⚙️ Settings
+        </button>
+      </div>
     </aside>
   );
 }

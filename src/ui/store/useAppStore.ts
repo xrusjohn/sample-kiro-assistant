@@ -29,6 +29,13 @@ export type SessionView = {
   createdFiles: CreatedFile[];
 };
 
+export type AcpDebugEntry = {
+  direction: "send" | "recv";
+  message: string;
+  timestamp: number;
+  sessionId?: string;
+};
+
 interface AppState {
   sessions: Record<string, SessionView>;
   activeSessionId: string | null;
@@ -41,6 +48,10 @@ interface AppState {
   historyRequested: Set<string>;
   commandResult: CommandResult | null;
   cliInteractive: boolean;
+
+  // Debug panel state
+  acpDebugLog: AcpDebugEntry[];
+  debugPanelOpen: boolean;
 
   // File sidebar state
   fileSidebarOpen: boolean;
@@ -62,6 +73,10 @@ interface AppState {
   setCommandResult: (result: CommandResult | null) => void;
   setCliInteractive: (value: boolean) => void;
   handleServerEvent: (event: ServerEvent) => void;
+
+  // Debug panel actions
+  setDebugPanelOpen: (open: boolean) => void;
+  clearAcpDebugLog: () => void;
 
   // File sidebar actions
   setFileSidebarOpen: (open: boolean) => void;
@@ -283,6 +298,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   commandResult: null,
   cliInteractive: false,
 
+  // Debug panel state
+  acpDebugLog: [],
+  debugPanelOpen: false,
+
   // File sidebar state
   fileSidebarOpen: false,
   fileSidebarWidth: 400,
@@ -368,6 +387,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setCommandResult: (result) => set({ commandResult: result }),
   setCliInteractive: (cliInteractive) => set({ cliInteractive }),
+
+  // Debug panel actions
+  setDebugPanelOpen: (debugPanelOpen) => set({ debugPanelOpen }),
+  clearAcpDebugLog: () => set({ acpDebugLog: [] }),
 
 
   handleServerEvent: (event) => {
@@ -552,6 +575,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       case "runner.error": {
         set({ globalError: event.payload.message });
+        break;
+      }
+
+      case "debug.acp": {
+        set((state) => ({
+          acpDebugLog: [...state.acpDebugLog.slice(-199), {
+            direction: event.payload.direction,
+            message: event.payload.message,
+            timestamp: event.payload.timestamp,
+            sessionId: event.payload.sessionId
+          }]
+        }));
         break;
       }
     }

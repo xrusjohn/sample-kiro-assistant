@@ -14,6 +14,7 @@ import MDContent from "./render/markdown";
 import { SettingsModal } from "./components/SettingsModal";
 import { usePromptActions } from "./hooks/usePromptActions";
 import kiroVideo from "../../kiro.mp4";
+import AcpDebugPanel from "./components/AcpDebugPanel";
 import promptStartSound from "./assets/on_it.mp3";
 import promptDoneSound from "./assets/done.mp3";
 import { PROMPT_SUBMIT_EVENT } from "./constants";
@@ -198,6 +199,8 @@ function App() {
   const prompt = useAppStore((s) => s.prompt);
   const setPrompt = useAppStore((s) => s.setPrompt);
   const pendingStart = useAppStore((s) => s.pendingStart);
+  const debugPanelOpen = useAppStore((s) => s.debugPanelOpen);
+  const setDebugPanelOpen = useAppStore((s) => s.setDebugPanelOpen);
 
   // File sidebar state
   const fileSidebarOpen = useAppStore((s) => s.fileSidebarOpen);
@@ -419,11 +422,13 @@ function App() {
         onNewSession={handleNewSession}
         onDeleteSession={handleDeleteSession}
         onOpenSettings={() => setShowSettings(true)}
+        onToggleDebug={() => setDebugPanelOpen(!debugPanelOpen)}
+        debugPanelOpen={debugPanelOpen}
       />
 
       <main
         className="flex flex-1 flex-col ml-[280px] bg-surface-cream transition-all duration-200"
-        style={{ marginRight: fileSidebarOpen ? `${fileSidebarWidth}px` : 0 }}
+        style={{ marginRight: (fileSidebarOpen ? fileSidebarWidth : 0) + (debugPanelOpen ? 420 : 0) }}
       >
         <div 
           className="flex items-center justify-between h-12 border-b border-ink-900/10 bg-surface-cream select-none px-4"
@@ -599,6 +604,7 @@ function App() {
           </div>
         </div>
       )}
+      {debugPanelOpen && <AcpDebugPanel />}
     </div>
   );
 }

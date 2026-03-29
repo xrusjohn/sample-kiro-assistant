@@ -21,7 +21,7 @@ let rpcId = 0;
 function rpcRequest(method: string, params: Record<string, unknown> = {}) {
   const msg = JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params }) + "\n";
   console.log("[kiro-acp send]", msg.trim().slice(0, 200));
-  return msg;
+  return { msg, id: rpcId };
 }
 
 function parseMessages(buffer: string): { messages: any[]; remainder: string } {
@@ -60,6 +60,13 @@ export function createAcpRunner(opts: {
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...enhancedEnv, NO_COLOR: "1", CLICOLOR: "0", KIRO_CLI_DISABLE_PAGER: "1" }
   });
+
+  // Helper to write an RPC message and emit a debug event
+  const writeRpc = (method: string, params: Record<string, unknown> = {}) => {
+    const { msg } = rpcRequest(method, params);
+    onEvent({ type: "debug.acp", payload: { sessionId: session.id, direction: "send", message: msg.trim(), timestamp: Date.now() } });
+    child.stdin?.write(msg);
+  };
 
   let aborted = false;
   let acpSessionId: string | null = null;
@@ -143,19 +150,23 @@ export function createAcpRunner(opts: {
     }
     firstPrompt = false;
 
-    child.stdin.write(rpcRequest("session/prompt", {
+    writeRpc("session/prompt", {
       sessionId: acpSessionId,
       prompt: [{ type: "text", text: fullText }]
-    }));
+    });
   };
 
   // --- Handle ACP messages ---
   const handleMessage = (msg: any) => {
     // Response to initialize
     if (msg.id && msg.result?.agentInfo) {
-      const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
-      if (model) params.model = model;
-      child.stdin?.write(rpcRequest("session/new", params));
+      if (resumeSessionId) {
+        writeRpc("session/load", { sessionId: resumeSessionId });
+      } else {
+        const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
+        if (model) params.model = model;
+        writeRpc("session/new", params);
+      }
       return;
     }
 
@@ -176,7 +187,7 @@ export function createAcpRunner(opts: {
       console.warn("[kiro-acp] session/load failed, falling back:", msg.error.message ?? msg.error);
       const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
       if (model) params.model = model;
-      child.stdin?.write(rpcRequest("session/new", params));
+      writeRpc("session/new", params);
       return;
     }
 
@@ -228,12 +239,18 @@ export function createAcpRunner(opts: {
     buffer += data.toString();
     const { messages, remainder } = parseMessages(buffer);
     buffer = remainder;
-    for (const m of messages) handleMessage(m);
+    for (const m of messages) {
+      onEvent({ type: "debug.acp", payload: { sessionId: session.id, direction: "recv", message: JSON.stringify(m).slice(0, 2000), timestamp: Date.now() } });
+      handleMessage(m);
+    }
   });
 
   child.stderr?.on("data", (d) => {
     const t = d.toString().trim();
-    if (t) console.warn("[kiro-acp]", t);
+    if (t) {
+      console.warn("[kiro-acp]", t);
+      onEvent({ type: "debug.acp", payload: { sessionId: session.id, direction: "recv", message: `[stderr] ${t}`, timestamp: Date.now() } });
+    }
   });
 
   child.on("error", (error) => {
@@ -247,11 +264,11 @@ export function createAcpRunner(opts: {
   });
 
   // --- Start ACP handshake ---
-  child.stdin?.write(rpcRequest("initialize", {
+  writeRpc("initialize", {
     protocolVersion: 1,
     clientCapabilities: { fs: { readTextFile: true, writeTextFile: true }, terminal: true },
     clientInfo: { name: "kiro-assistant-web", version: "0.1.0" }
-  }));
+  });
 
   return {
     ready,
@@ -266,7 +283,7 @@ export function createAcpRunner(opts: {
     abort() {
       if (aborted) return;
       aborted = true;
-      if (acpSessionId) child.stdin?.write(rpcRequest("session/cancel", { sessionId: acpSessionId }));
+      if (acpSessionId) writeRpc("session/cancel", { sessionId: acpSessionId });
       setTimeout(() => child.kill("SIGINT"), 500);
     }
   };
