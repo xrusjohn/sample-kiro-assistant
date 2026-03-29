@@ -56,6 +56,21 @@ app.use(express.json({ limit: "50mb" }));
 let widgetsEnabled = process.env.KIRO_WIDGETS !== "0";
 
 app.get("/api/widgets-enabled", (_req, res) => res.json(widgetsEnabled));
+
+// OAuth callback — serves a page that extracts the code and posts it to the parent window
+app.get("/auth/callback", (_req, res) => {
+  res.send(`<!DOCTYPE html><html><body><script>
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const error = params.get("error");
+    if (window.opener) {
+      window.opener.postMessage({ type: "AUTH_CALLBACK", code, error }, "*");
+      document.body.innerHTML = "<h3>✓ Authenticated — you can close this tab</h3>";
+    } else {
+      document.body.innerHTML = "<h3>Code: " + (code || error || "none") + "</h3><p>Copy this code back to the console.</p>";
+    }
+  </script></body></html>`);
+});
 app.post("/api/widgets-enabled", (req, res) => {
   widgetsEnabled = req.body?.enabled !== false;
   process.env.KIRO_WIDGETS = widgetsEnabled ? "1" : "0";
