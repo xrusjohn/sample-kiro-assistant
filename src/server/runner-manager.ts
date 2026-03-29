@@ -1,10 +1,12 @@
 import { createAcpRunner, type RunnerHandle } from "./runner.js";
 import type { ServerEvent } from "../electron/types.js";
 import type { Session } from "../electron/libs/session-store.js";
+import { AgentRegistry } from "./agent-registry.js";
 
 export interface RunnerEntry {
   handle: RunnerHandle;
   sessionId: string;
+  agentId: string;
   state: "starting" | "active" | "idle" | "suspended";
   lastActivity: number;
   spawnedAt: number;
@@ -26,8 +28,10 @@ export class RunnerManager {
   private entries = new Map<string, RunnerEntry>();
   private config: RunnerManagerConfig;
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
+  private registry: AgentRegistry;
 
-  constructor(config: Partial<RunnerManagerConfig> = {}) {
+  constructor(registry: AgentRegistry, config: Partial<RunnerManagerConfig> = {}) {
+    this.registry = registry;
     this.config = { ...defaults, ...config };
     this.sweepTimer = setInterval(() => this.sweep(), this.config.sweepIntervalMs);
   }
@@ -45,6 +49,7 @@ export class RunnerManager {
   spawn(opts: {
     session: Session;
     model: string;
+    agentId?: string;
     resumeSessionId?: string;
     history?: any[];
     onEvent: (event: ServerEvent) => void;
@@ -60,10 +65,14 @@ export class RunnerManager {
 
     if (!this.canSpawn()) return null;
 
-    const handle = createAcpRunner(opts);
+    const resolvedAgentId = opts.agentId ?? this.registry.getDefault();
+    const agent = this.registry.get(resolvedAgentId);
+
+    const handle = createAcpRunner({ ...opts, agent });
     this.entries.set(opts.session.id, {
       handle,
       sessionId: opts.session.id,
+      agentId: resolvedAgentId,
       state: "starting",
       lastActivity: Date.now(),
       spawnedAt: Date.now(),
@@ -79,6 +88,7 @@ export class RunnerManager {
   getOrSpawn(opts: {
     session: Session;
     model: string;
+    agentId?: string;
     resumeSessionId?: string;
     history?: any[];
     onEvent: (event: ServerEvent) => void;

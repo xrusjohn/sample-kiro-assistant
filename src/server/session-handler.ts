@@ -1,6 +1,7 @@
 import type { ServerEvent, ClientEvent } from "../electron/types.js";
 import { SessionStore } from "../electron/libs/session-store.js";
 import { RunnerManager } from "./runner-manager.js";
+import { AgentRegistry } from "./agent-registry.js";
 import { DB_PATH } from "./paths.js";
 import { normalizeWorkingDirectory } from "./util.js";
 import { createWorkspaceDirectory } from "../electron/libs/workspace.js";
@@ -8,7 +9,8 @@ import { loadAssistantSettings } from "./app-settings.js";
 import { DEFAULT_MODEL_ID } from "../shared/models.js";
 
 export const sessions = new SessionStore(DB_PATH);
-export const manager = new RunnerManager();
+export const registry = new AgentRegistry();
+export const manager = new RunnerManager(registry);
 
 type BroadcastFn = (event: ServerEvent) => void;
 let broadcastFn: BroadcastFn = () => {};

@@ -28,7 +28,7 @@
   - Update `Session` and `StoredSession` TypeScript types to include `agentId: string`
   - Update `createSession()`, `loadSessions()`, `getSession()`, and `persistSession()` to read/write `agent_id`
 
-- [ ] 2c. Update `src/server/runner-manager.ts` — add `agentId` to `RunnerEntry`
+- [x] 2c. Update `src/server/runner-manager.ts` — add `agentId` to `RunnerEntry`
   - Update existing `spawn()` and `getOrSpawn()` opts to accept `agentId`
   - Look up `AgentDefinition` from registry and pass to `createAcpRunner()`
   - Store `agentId` in the `RunnerEntry` for tracking

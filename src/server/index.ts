@@ -8,7 +8,7 @@ import { extname, join, basename, resolve, normalize } from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 
-import { handleClientEvent, sessions, setBroadcast, abortAll, manager } from "./session-handler.js";
+import { handleClientEvent, sessions, setBroadcast, abortAll, manager, registry } from "./session-handler.js";
 import { generateSessionTitle, normalizeWorkingDirectory, enhancedEnv } from "./util.js";
 import { loadAssistantSettings, saveAssistantSettings } from "./app-settings.js";
 import { SETTINGS_PATH } from "./paths.js";
@@ -18,7 +18,6 @@ import { ensureWorkspaceRoot } from "../electron/libs/workspace.js";
 import { loadSkills } from "../electron/libs/skill-loader.js";
 import { models as availableModels, DEFAULT_MODEL_ID } from "../shared/models.js";
 import { killStale, cleanup as cleanupPidFile } from "./pid-tracker.js";
-import { AgentRegistry } from "./agent-registry.js";
 
 import type { ServerEvent } from "../electron/types.js";
 
@@ -28,7 +27,6 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 const upload = multer({ dest: "/tmp/kiro-uploads" });
-const registry = new AgentRegistry();
 
 // --- WebSocket: event stream ---
 const clients = new Set<WebSocket>();
