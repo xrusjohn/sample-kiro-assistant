@@ -95,7 +95,7 @@ class AgentRegistry {
 }
 ```
 
-Availability check uses Node's `child_process.execFile` with a short timeout to run `which <binary>` (Unix) or `where <binary>` (Windows). The result is cached for the lifetime of the server process.
+Availability check uses Node's `child_process.execFile` with a short timeout to run `which <binary>` (Unix) or `where <binary>` (Windows). The result is cached with a short TTL (e.g., 30 seconds) so that `GET /api/agents` re-checks periodically without hammering the filesystem, and agents installed mid-session are detected without a server restart.
 
 ### 2. Runner Changes (`src/server/runner.ts`)
 
@@ -103,28 +103,35 @@ Availability check uses Node's `child_process.execFile` with a short timeout to 
 
 ```typescript
 // Before
-function createAcpRunner(opts: { sessionId, cwd, kiroConversationId?, conversationHistory? }): RunnerHandle
+function createAcpRunner(opts: { session, model, resumeSessionId?, history?, onEvent, onSessionUpdate? }): RunnerHandle
 
 // After
-function createAcpRunner(opts: { sessionId, cwd, agent: AgentDefinition, kiroConversationId?, conversationHistory? }): RunnerHandle
+function createAcpRunner(opts: { session, model, agent: AgentDefinition, resumeSessionId?, history?, onEvent, onSessionUpdate? }): RunnerHandle
 ```
 
 Inside `createAcpRunner`, replace:
 ```typescript
 // Before
-const binary = process.env.KIRO_CLI_BINARY ?? "kiro-cli";
+const binary = resolveKiroCliBinary();
+// ...
 const agent = (process.env.KIRO_AGENT ?? "kiro-assistant").trim();
 const child = spawn(binary, ["acp", "--agent", agent, "--trust-all-tools"], { ... });
 
 // After
-const child = spawn(opts.agent.resolvedBinary!, opts.agent.defaultArgs, { ... });
+const binary = opts.agent.resolvedBinary;
+if (!binary) { /* emit error, return stub handle */ }
+const child = spawn(binary, opts.agent.defaultArgs, { ... });
 ```
+
+Also update the `child.on("close")` error message to use the agent label instead of hard-coded "kiro-cli".
 
 No changes needed to the ACP message-handling logic — both agents speak JSON-RPC 2.0 ACP over stdin/stdout.
 
+**Backwards compatibility:** If `KIRO_CLI_BINARY` or `KIRO_AGENT` env vars are set but `KIRO_BINARY` is not, the Kiro agent definition falls back to reading the legacy vars. This is handled inside `AgentRegistry` during binary resolution, not in `runner.ts`.
+
 ### 3. Runner Manager Changes (`src/server/runner-manager.ts`)
 
-Add `agentId` to `RunnerEntry` so the manager knows which agent each process uses:
+The existing `RunnerManager` class already manages runner entries. Add `agentId` to `RunnerEntry`:
 
 ```typescript
 interface RunnerEntry {
@@ -137,37 +144,37 @@ interface RunnerEntry {
 }
 ```
 
-Update `spawn()` and `getOrSpawn()` signatures to accept `agentId`:
+Update `spawn()` and `getOrSpawn()` opts to accept `agentId`:
 
 ```typescript
-spawn(sessionId: string, opts: SpawnOpts & { agentId: string }): RunnerHandle | null
-getOrSpawn(sessionId: string, opts: GetOrSpawnOpts & { agentId: string }): RunnerHandle | null
+spawn(opts: { session, model, agentId?: string, ... }): RunnerHandle | null
+getOrSpawn(opts: { session, model, agentId?: string, ... }): RunnerHandle | null
 ```
 
-Inside both methods, look up the `AgentDefinition` from `AgentRegistry` and pass it to `createAcpRunner()`.
+Inside both methods, look up the `AgentDefinition` from `AgentRegistry` and pass it to `createAcpRunner()`. Store `agentId` in the `RunnerEntry`.
 
-### 4. Session Database Schema (`src/server/sessions.ts` or equivalent)
+### 4. Session Database Schema (`src/electron/libs/session-store.ts`)
 
-Add `agent_id` column to the sessions table:
-
-```sql
-ALTER TABLE sessions ADD COLUMN agent_id TEXT NOT NULL DEFAULT 'kiro';
-```
-
-For the `Session` TypeScript type:
+Add `agent_id` column to the sessions table using the existing migration pattern (pragma table_info check):
 
 ```typescript
-interface Session {
-  id: string;
-  title: string;
-  status: SessionStatus;
-  agentId: string;           // NEW — defaults to "kiro"
-  kiroConversationId?: string;
-  cwd?: string;
-  createdAt: number;
-  updatedAt: number;
+// In SessionStore.initialize(), after existing column migrations:
+if (!columnNames.has("agent_id")) {
+  this.db.exec(`alter table sessions add column agent_id text not null default 'kiro'`);
 }
 ```
+
+Update the `Session` and `StoredSession` TypeScript types:
+
+```typescript
+// In Session type:
+agentId?: string;           // NEW — defaults to "kiro"
+
+// In StoredSession type:
+agentId?: string;
+```
+
+Update `createSession()` to accept and persist `agentId`, and `loadSessions()` / `getSession()` to read it back.
 
 ### 5. Session Handler Changes (`src/server/session-handler.ts`)
 
@@ -178,11 +185,8 @@ interface Session {
 ### 6. Client Event Types (update `src/electron/types.ts`)
 
 ```typescript
-// Before
-type SessionStartPayload = { title: string; prompt: string; cwd?: string; allowedTools?: string[]; interactive?: boolean }
-
-// After
-type SessionStartPayload = { title: string; prompt: string; agentId?: string; cwd?: string; allowedTools?: string[]; interactive?: boolean }
+// In SessionStartPayload, add:
+agentId?: string;
 ```
 
 New server event to push agent availability to the UI on connect:
@@ -196,6 +200,8 @@ interface AgentInfo {
   available: boolean;
 }
 ```
+
+The `agents.list` event fires on initial WebSocket connection and can be re-requested via `GET /api/agents` at any time (e.g., after the user installs a missing binary).
 
 ### 7. REST Endpoint: `GET /api/agents`
 
@@ -254,6 +260,10 @@ interface AppState {
 - On store init, read `defaultAgentId` from `localStorage` (fallback: `"kiro"`)
 - Persist `agentId` per session in the `SessionView` type
 
+### 12. Settings Modal: Default Agent (`src/ui/components/SettingsModal.tsx`)
+
+Add a "Default Agent" dropdown/selector to the Settings modal, alongside existing settings like model selection. This reads from and writes to `appStore.defaultAgentId`. Unavailable agents are shown but marked as "(not installed)".
+
 ## Sequence: New Session With Agent Selection
 
 ```
@@ -289,7 +299,7 @@ CLAUDE_BINARY=claude         # override Claude Code binary path
 DEFAULT_AGENT=kiro           # server-side default agent (UI preference takes precedence)
 ```
 
-The existing `KIRO_AGENT` and `KIRO_CLI_BINARY` env vars are deprecated in favor of the new `KIRO_BINARY` env var. They remain functional for backwards compatibility but are no longer the primary configuration mechanism.
+The existing `KIRO_AGENT` and `KIRO_CLI_BINARY` env vars are deprecated in favor of the new `KIRO_BINARY` env var. They remain functional as fallbacks: if `KIRO_BINARY` is not set, `AgentRegistry` checks `KIRO_CLI_BINARY` for the binary path and `KIRO_AGENT` for the agent name flag. A console warning is emitted when legacy vars are used.
 
 ## ACP Compatibility Notes
 

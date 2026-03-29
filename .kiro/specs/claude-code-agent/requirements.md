@@ -43,6 +43,7 @@ Allow users to choose Claude Code as the agent backend for a session, alongside 
 - [ ] On server start (or first request), the system checks whether each agent binary is available via `which`/`where` or a test invocation
 - [ ] Unavailable agents are shown as disabled in the agent selector, with a tooltip explaining the binary is not found
 - [ ] A REST endpoint (`GET /api/agents`) returns the list of configured agents and their availability status
+- [ ] The `GET /api/agents` endpoint re-checks availability on each call (not cached for server lifetime) so that agents installed mid-session are detected without a server restart
 
 ### Requirement 5: Session Resume Uses Correct Agent
 
@@ -61,6 +62,7 @@ Allow users to choose Claude Code as the agent backend for a session, alongside 
 - [ ] A settings option (persisted in app settings) stores the preferred default agent
 - [ ] The agent selector in the new-session modal pre-selects the stored default
 - [ ] The default can be overridden per-session without changing the stored preference
+- [ ] The default agent preference is exposed in the Settings modal UI alongside existing settings
 
 ## Correctness Properties
 
