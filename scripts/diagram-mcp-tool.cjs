@@ -83,7 +83,9 @@ const PROMPT_TEMPLATES = {
       role: "user",
       content: {
         type: "text",
-        text: `Create an architecture diagram for: ${args.description}. Use the render_diagram tool with the Python diagrams library. Choose appropriate AWS/cloud icons, use clusters for logical groupings, and colored edges for different flows.`,
+        text: args.description
+          ? `Create an architecture diagram for: ${args.description}. Use the render_diagram tool with the Python diagrams library. Choose appropriate AWS/cloud icons, use clusters for logical groupings, and colored edges for different flows.`
+          : `I'd like to create a custom architecture diagram. Please ask me what system or infrastructure I want to visualize, then use the render_diagram tool with the Python diagrams library to create it.`,
       },
     }],
   }),
