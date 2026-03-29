@@ -47,13 +47,21 @@ function scheduleRefresh() {
   if (refreshTimer) clearTimeout(refreshTimer);
   if (!state.expiresAt || !state.refreshToken) return;
 
-  // Refresh 60s before expiry
-  const ms = state.expiresAt - Date.now() - 60_000;
+  // Refresh 90s before expiry (gives us buffer for network delays)
+  const ms = state.expiresAt - Date.now() - 90_000;
   if (ms <= 0) {
+    // Already past refresh window — try immediately
     refresh();
     return;
   }
-  refreshTimer = setTimeout(refresh, ms);
+  console.log(`[auth] refresh scheduled in ${Math.round(ms / 1000)}s`);
+  refreshTimer = setTimeout(() => {
+    console.log("[auth] auto-refreshing token...");
+    refresh().then(ok => {
+      if (ok) console.log("[auth] ✓ token refreshed");
+      else console.log("[auth] ✗ refresh failed — user needs to re-authenticate");
+    });
+  }, ms);
 }
 
 async function processTokens(data: { id_token?: string; access_token?: string; refresh_token?: string; expires_in?: number }) {
@@ -207,8 +215,15 @@ export function onAuthChange(fn: AuthListener) { listeners.add(fn); fn(state); r
 export function timeToExpiry(): number | null { return state.expiresAt ? Math.max(0, state.expiresAt - Date.now()) : null; }
 
 // Boot: if we have a refresh token but expired id token, try refreshing
+// If we have a valid token, push it to the server and schedule refresh
 if (state.refreshToken && !isAuthenticated()) {
   refresh();
-} else {
+} else if (isAuthenticated()) {
+  // Push existing valid token to server
+  fetch("/api/auth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken: state.idToken }),
+  }).catch(() => {});
   scheduleRefresh();
 }
