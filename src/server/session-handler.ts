@@ -1,6 +1,6 @@
 import type { ServerEvent, ClientEvent } from "../electron/types.js";
-import { createAcpRunner, type RunnerHandle } from "./runner.js";
 import { SessionStore } from "../electron/libs/session-store.js";
+import { RunnerManager } from "./runner-manager.js";
 import { DB_PATH } from "./paths.js";
 import { normalizeWorkingDirectory } from "./util.js";
 import { createWorkspaceDirectory } from "../electron/libs/workspace.js";
@@ -8,19 +8,14 @@ import { loadAssistantSettings } from "./app-settings.js";
 import { DEFAULT_MODEL_ID } from "../shared/models.js";
 
 export const sessions = new SessionStore(DB_PATH);
-const runnerHandles = new Map<string, RunnerHandle>();
+export const manager = new RunnerManager();
 
 type BroadcastFn = (event: ServerEvent) => void;
 let broadcastFn: BroadcastFn = () => {};
 
 export function setBroadcast(fn: BroadcastFn) { broadcastFn = fn; }
 
-export function abortAll() {
-  for (const [id, handle] of runnerHandles) {
-    handle.abort();
-    runnerHandles.delete(id);
-  }
-}
+export function abortAll() { manager.abortAll(); }
 
 const resolveModelId = () => loadAssistantSettings().defaultModel?.trim() || DEFAULT_MODEL_ID;
 
@@ -45,6 +40,12 @@ export function handleClientEvent(event: ClientEvent) {
   }
 
   if (event.type === "session.start") {
+    if (!manager.canSpawn()) {
+      const health = manager.getHealth();
+      emit({ type: "runner.error", payload: { message: `Session limit reached (${health.activeProcesses}/${health.maxConcurrent}). Close or wait for an idle session to be suspended.` } });
+      return;
+    }
+
     let cwd = normalizeWorkingDirectory(event.payload.cwd);
     if (!cwd) cwd = createWorkspaceDirectory();
     const session = sessions.createSession({
@@ -55,25 +56,26 @@ export function handleClientEvent(event: ClientEvent) {
     const modelId = resolveModelId();
     session.selectedModel = modelId;
 
-    // Create a long-lived ACP runner for this session
-    const handle = createAcpRunner({
+    const handle = manager.spawn({
       session: session as any,
       model: modelId,
       onEvent: emit,
       onSessionUpdate: (u) => sessions.updateSession(session.id, u)
     });
-    runnerHandles.set(session.id, handle);
+
+    if (!handle) {
+      emit({ type: "runner.error", payload: { sessionId: session.id, message: "Failed to spawn ACP process." } });
+      return;
+    }
 
     sessions.updateSession(session.id, { status: "running", lastPrompt: event.payload.prompt });
     emit({ type: "session.status", payload: { sessionId: session.id, status: "running", title: session.title, cwd: session.cwd } });
 
-    // Delay user prompt so UI switches to session first
     const initialPrompt = event.payload.prompt;
     setTimeout(() => {
       emit({ type: "stream.user_prompt", payload: { sessionId: session.id, prompt: initialPrompt } });
     }, 200);
 
-    // Send the prompt (runner queues it until ACP is ready)
     handle.sendPrompt(event.payload.prompt);
     return;
   }
@@ -82,27 +84,29 @@ export function handleClientEvent(event: ClientEvent) {
     const session = sessions.getSession(event.payload.sessionId);
     if (!session) { emit({ type: "runner.error", payload: { message: "Unknown session" } }); return; }
 
-    let handle = runnerHandles.get(session.id);
+    const modelId = resolveModelId();
+    session.selectedModel = modelId;
+    const history = sessions.getSessionHistory(session.id);
+
+    const handle = manager.getOrSpawn({
+      session: session as any,
+      model: modelId,
+      resumeSessionId: session.kiroConversationId || undefined,
+      history: history?.messages ?? [],
+      onEvent: emit,
+      onSessionUpdate: (u) => sessions.updateSession(session.id, u)
+    });
+
     if (!handle) {
-      // No runner — server was restarted. Spin up a new ACP process.
-      const modelId = resolveModelId();
-      session.selectedModel = modelId;
-      const history = sessions.getSessionHistory(session.id);
-      handle = createAcpRunner({
-        session: session as any,
-        model: modelId,
-        resumeSessionId: session.kiroConversationId || undefined,
-        history: history?.messages ?? [],
-        onEvent: emit,
-        onSessionUpdate: (u) => sessions.updateSession(session.id, u)
-      });
-      runnerHandles.set(session.id, handle);
+      const health = manager.getHealth();
+      emit({ type: "runner.error", payload: { sessionId: session.id, message: `Session limit reached (${health.activeProcesses}/${health.maxConcurrent}).` } });
+      return;
     }
 
+    manager.markActive(session.id);
     sessions.updateSession(session.id, { status: "running", lastPrompt: event.payload.prompt });
     emit({ type: "stream.user_prompt", payload: { sessionId: session.id, prompt: event.payload.prompt } });
 
-    // Reuse the existing ACP process
     handle.sendPrompt(event.payload.prompt);
     return;
   }
@@ -110,7 +114,7 @@ export function handleClientEvent(event: ClientEvent) {
   if (event.type === "session.stop") {
     const session = sessions.getSession(event.payload.sessionId);
     if (!session) return;
-    // Don't kill the runner — just mark idle. The ACP process stays alive.
+    manager.markIdle(session.id);
     sessions.updateSession(session.id, { status: "idle" });
     emit({ type: "session.status", payload: { sessionId: session.id, status: "idle", title: session.title, cwd: session.cwd } });
     return;
@@ -118,8 +122,7 @@ export function handleClientEvent(event: ClientEvent) {
 
   if (event.type === "session.delete") {
     const id = event.payload.sessionId;
-    const handle = runnerHandles.get(id);
-    if (handle) { handle.abort(); runnerHandles.delete(id); }
+    manager.destroy(id);
     sessions.deleteSession(id);
     emit({ type: "session.deleted", payload: { sessionId: id } });
     return;

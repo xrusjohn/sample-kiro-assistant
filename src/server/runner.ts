@@ -122,7 +122,7 @@ export function createAcpRunner(opts: {
       });
       accumulatedText = "";
     }
-    onEvent({ type: "session.status", payload: { sessionId: session.id, status: "completed", title: session.title, cwd: session.cwd } });
+    onEvent({ type: "session.status", payload: { sessionId: session.id, status: "idle", title: session.title, cwd: session.cwd } });
   };
 
   // --- Send a prompt on the existing ACP session ---

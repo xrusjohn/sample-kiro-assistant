@@ -8,7 +8,7 @@ import { extname, join, basename, resolve, normalize } from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 
-import { handleClientEvent, sessions, setBroadcast, abortAll } from "./session-handler.js";
+import { handleClientEvent, sessions, setBroadcast, abortAll, manager } from "./session-handler.js";
 import { generateSessionTitle, normalizeWorkingDirectory, enhancedEnv } from "./util.js";
 import { loadAssistantSettings, saveAssistantSettings } from "./app-settings.js";
 import { SETTINGS_PATH } from "./paths.js";
@@ -71,6 +71,10 @@ app.post("/api/rename-session", (req, res) => {
   if (!sessionId || !title?.trim()) { res.json({ success: false, error: "sessionId and title required" }); return; }
   sessions.updateSession(sessionId, { title: title.trim() });
   res.json({ success: true });
+});
+
+app.get("/api/sessions/health", (_req, res) => {
+  res.json(manager.getHealth());
 });
 
 app.get("/api/recent-cwds", (req, res) => {
