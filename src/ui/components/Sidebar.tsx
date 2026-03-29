@@ -1,6 +1,7 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useAppStore } from "../store/useAppStore";
+import { login, logout, onAuthChange, isAuthenticated, timeToExpiry } from "../auth";
 
 interface SidebarProps {
   connected: boolean;
@@ -24,6 +25,22 @@ export function Sidebar({
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const [authUser, setAuthUser] = useState<string | null>(null);
+  const [authExpiry, setAuthExpiry] = useState<number | null>(null);
+
+  useEffect(() => {
+    return onAuthChange((s) => {
+      setAuthUser(s.username || s.email);
+      setAuthExpiry(s.expiresAt);
+    });
+  }, []);
+
+  // Update expiry display every 30s
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     if (renamingId) renameInputRef.current?.focus();
@@ -218,6 +235,31 @@ export function Sidebar({
         >
           ⚙️ Settings
         </button>
+      </div>
+      <div className="mt-2">
+        {authUser ? (
+          <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-3 py-2">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-emerald-600 truncate">🔑 {authUser}</div>
+              <div className="text-[10px] text-muted">
+                {(() => {
+                  const ms = timeToExpiry();
+                  if (!ms) return "expired";
+                  const min = Math.floor(ms / 60000);
+                  return min > 0 ? `${min}m remaining` : "expiring...";
+                })()}
+              </div>
+            </div>
+            <button onClick={logout} className="text-[10px] text-muted hover:text-error ml-2 shrink-0">logout</button>
+          </div>
+        ) : (
+          <button
+            className="w-full rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-500/10 transition-colors"
+            onClick={() => login()}
+          >
+            🔐 Sign in with Midway
+          </button>
+        )}
       </div>
     </aside>
   );
