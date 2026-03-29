@@ -28,10 +28,12 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void): Promp
   const isRunning = activeSession?.status === "running";
   const [connecting, setConnecting] = useState(false);
 
-  // Clear connecting when session starts running or errors
+  // Clear connecting when session starts running, errors, or user switches sessions
   useEffect(() => {
     if (isRunning || activeSession?.status === "error") setConnecting(false);
   }, [isRunning, activeSession?.status]);
+
+  useEffect(() => { setConnecting(false); }, [activeSessionId]);
 
   const runSlashCommand = useCallback(
     async (raw: string) => {

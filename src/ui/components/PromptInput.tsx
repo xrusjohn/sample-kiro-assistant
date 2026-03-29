@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEffectiveCwd } from "../hooks/useEffectiveCwd";
+import { useAppStore } from "../store/useAppStore";
 import type { PromptActions } from "../hooks/usePromptActions";
 
 const MAX_ROWS = 12;
@@ -16,6 +17,39 @@ export function PromptInput({ actions }: PromptInputProps) {
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const [prompt, setPrompt] = useState("");
   const [uploadMessage, setUploadMessage] = useState<{ text: string; variant: "success" | "error" } | null>(null);
+  const [modelLabel, setModelLabel] = useState("");
+
+  const activeSessionId = useAppStore((s) => s.activeSessionId);
+  const activeSession = useAppStore((s) => activeSessionId ? s.sessions[activeSessionId] : undefined);
+  const sessionCwd = activeSession?.cwd;
+  const contextPercent = activeSession?.contextUsagePercent;
+
+  useEffect(() => {
+    fetch("/api/model-settings").then(r => r.json()).then(d => {
+      const m = d.models?.find((m: any) => m.id === d.currentModelId);
+      setModelLabel(m?.label ?? d.currentModelId ?? "");
+    }).catch(() => {});
+  }, []);
+
+  const formatCwd = (cwd?: string) => {
+    if (!cwd) return "";
+    const home = "/home/";
+    const idx = cwd.indexOf(home);
+    if (idx >= 0) {
+      const afterHome = cwd.slice(idx + home.length);
+      const slash = afterHome.indexOf("/");
+      return slash >= 0 ? "~" + afterHome.slice(slash) : "~";
+    }
+    return cwd;
+  };
+
+  const contextIcon = (pct?: number) => {
+    if (pct == null) return "○";
+    if (pct < 25) return "◔";
+    if (pct < 50) return "◑";
+    if (pct < 75) return "◕";
+    return "●";
+  };
 
   const handleUpload = useCallback(async () => {
     setUploadMessage(null);
@@ -88,7 +122,16 @@ export function PromptInput({ actions }: PromptInputProps) {
 
   return (
     <section className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-surface via-surface to-transparent pb-6 px-2 lg:pb-8 pt-8 lg:ml-[280px]">
-      <div className="mx-auto flex w-full max-w-full items-end gap-3 rounded-2xl border border-ink-900/10 bg-surface px-4 py-3 shadow-card lg:max-w-3xl">
+      <div className="relative mx-auto flex w-full max-w-full items-end gap-3 rounded-2xl border border-ink-900/10 bg-surface px-4 py-3 shadow-card lg:max-w-3xl">
+        {(modelLabel || sessionCwd) && (
+          <div className="absolute -top-5 left-0 right-0 flex justify-center">
+            <div className="flex items-center gap-2 text-[11px] text-muted font-mono">
+              {modelLabel && <span className="text-ink-500">Kiro · {modelLabel}</span>}
+              {contextPercent != null && <span title={`Context: ${contextPercent}%`}>{contextIcon(contextPercent)} {contextPercent}%</span>}
+              {sessionCwd && <span className="text-ink-400">{formatCwd(sessionCwd)}</span>}
+            </div>
+          </div>
+        )}
         <textarea
           rows={1}
           className="flex-1 resize-none bg-transparent py-1.5 text-sm text-ink-800 placeholder:text-muted focus:outline-none"

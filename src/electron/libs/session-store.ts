@@ -288,6 +288,9 @@ export class SessionStore {
   }
 
   private loadSessions(): void {
+    // Reset any sessions stuck in "running" from a previous crash/restart
+    this.db.prepare(`update sessions set status = 'idle' where status = 'running'`).run();
+
     const rows = this.db
       .prepare(
         `select id, title, claude_session_id, kiro_conversation_id, kiro_history_cursor, status, cwd, allowed_tools, last_prompt

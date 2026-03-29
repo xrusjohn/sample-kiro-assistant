@@ -230,6 +230,15 @@ export function createAcpRunner(opts: {
     // Response to session/prompt (stopReason)
     if (msg.id && msg.result?.stopReason) { finishTurn(); return; }
 
+    // Kiro metadata (context usage)
+    if (msg.method === "_kiro.dev/metadata" && msg.params) {
+      const ctx = msg.params.contextUsagePercentage;
+      if (typeof ctx === "number") {
+        onEvent({ type: "session.metadata", payload: { sessionId: session.id, contextUsagePercent: Math.round(ctx) } } as any);
+      }
+      return;
+    }
+
     // Error
     if (msg.error) {
       emitDelta(`\n\nError: ${msg.error.message ?? JSON.stringify(msg.error)}`);
