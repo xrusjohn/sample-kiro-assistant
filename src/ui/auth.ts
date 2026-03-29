@@ -226,11 +226,11 @@ export function timeToExpiry(): number | null { return state.expiresAt ? Math.ma
 if (state.refreshToken && !isAuthenticated()) {
   refresh();
 } else if (isAuthenticated()) {
-  // Push existing valid token to server
+  // Push existing valid token to server and file
   fetch("/api/auth/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken: state.idToken }),
+    body: JSON.stringify({ idToken: state.idToken, expiresAt: state.expiresAt }),
   }).catch(() => {});
   scheduleRefresh();
 }

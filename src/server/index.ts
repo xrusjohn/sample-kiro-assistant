@@ -145,6 +145,13 @@ app.get("/auth/callback", (_req, res) => {
 
     status.innerHTML = "<h3 style='color:green'>✓ Signed in as " + (username || email || "user") + "</h3><p>You can close this tab.</p>";
 
+    // Push token to server file
+    fetch("/api/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken: data.id_token, expiresAt: expiresAt }),
+    });
+
     // Notify opener if available
     if (window.opener) {
       window.opener.postMessage({ type: "AUTH_CALLBACK", success: true }, "*");
