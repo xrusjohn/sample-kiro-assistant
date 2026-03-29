@@ -108,13 +108,14 @@ app.get("/auth/callback", (_req, res) => {
       return;
     }
 
-    // Decode ID token for user info
-    let email = null, username = null;
+    // Decode ID token for user info and real expiry
+    let email = null, username = null, expiresAt = null;
     if (data.id_token) {
       try {
         const claims = JSON.parse(atob(data.id_token.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));
         email = claims.email || null;
         username = (claims["cognito:username"] || "").replace("Midway_", "") || null;
+        if (claims.exp) expiresAt = claims.exp * 1000;
       } catch {}
     }
 
@@ -123,7 +124,7 @@ app.get("/auth/callback", (_req, res) => {
       idToken: data.id_token || null,
       accessToken: data.access_token || null,
       refreshToken: data.refresh_token || null,
-      expiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : null,
+      expiresAt: expiresAt || (data.expires_in ? Date.now() + data.expires_in * 1000 : null),
       email: email,
       username: username,
     }));

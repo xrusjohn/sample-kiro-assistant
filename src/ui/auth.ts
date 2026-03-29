@@ -68,14 +68,21 @@ async function processTokens(data: { id_token?: string; access_token?: string; r
   state.idToken = data.id_token || null;
   state.accessToken = data.access_token || null;
   if (data.refresh_token) state.refreshToken = data.refresh_token;
-  state.expiresAt = data.expires_in ? Date.now() + data.expires_in * 1000 : null;
 
+  // Use the ID token's actual exp claim (not expires_in which is for the access token)
   if (data.id_token) {
     try {
       const claims = decodeJwt(data.id_token);
       state.email = (claims.email as string) || null;
       state.username = (claims["cognito:username"] as string)?.replace("Midway_", "") || null;
+      if (claims.exp) {
+        state.expiresAt = (claims.exp as number) * 1000; // JWT exp is in seconds
+        console.log(`[auth] ID token expires in ${Math.round((state.expiresAt - Date.now()) / 60000)}m`);
+      }
     } catch {}
+  } else {
+    // Fallback to expires_in if no ID token
+    state.expiresAt = data.expires_in ? Date.now() + data.expires_in * 1000 : null;
   }
 
   saveToStorage();
