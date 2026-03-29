@@ -164,7 +164,7 @@ export function createAcpRunner(opts: {
     // Response to initialize
     if (msg.id && msg.result?.agentInfo) {
       if (resumeSessionId) {
-        writeRpc("session/load", { sessionId: resumeSessionId });
+        writeRpc("session/load", { sessionId: resumeSessionId, mcpServers: [] });
       } else {
         const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
         if (model) params.model = model;

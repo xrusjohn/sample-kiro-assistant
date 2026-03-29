@@ -49,7 +49,7 @@ function handleMessage(msg) {
     initialized = true;
     if (resumeSessionId) {
       console.log("\x1b[33mResuming session:\x1b[0m", resumeSessionId);
-      send("session/load", { sessionId: resumeSessionId });
+      send("session/load", { sessionId: resumeSessionId, mcpServers: [] });
     } else {
       send("session/new", { cwd, mcpServers: [] });
     }
@@ -160,7 +160,7 @@ rl.on("line", (line) => {
       case "load":
         if (!arg) { console.log("Usage: /load <sessionId>"); break; }
         sessionId = null; ready = false; resumeSessionId = arg;
-        send("session/load", { sessionId: arg });
+        send("session/load", { sessionId: arg, mcpServers: [] });
         break;
       case "sessions":
         try {
