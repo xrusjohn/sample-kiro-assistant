@@ -94,7 +94,7 @@ async function processTokens(data: { id_token?: string; access_token?: string; r
     fetch("/api/auth/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken: state.idToken }),
+      body: JSON.stringify({ idToken: state.idToken, expiresAt: state.expiresAt }),
     }).catch(() => {});
   }
 }

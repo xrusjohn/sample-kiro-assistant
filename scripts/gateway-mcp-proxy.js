@@ -21,10 +21,19 @@
 
 const GATEWAY_URL = process.env.GATEWAY_URL || "https://kiro-assistant-gateway-bfsj0hg96b.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp";
 const TOKEN_URL = process.env.TOKEN_URL || "http://localhost:3001/api/auth/token";
+const TOKEN_FILE = require("path").join(process.env.HOME || "/tmp", ".kiro-auth-token");
 
 let cachedToken = null;
 
 async function getToken() {
+  // Try file first (survives server restarts), fall back to HTTP
+  try {
+    const data = JSON.parse(require("fs").readFileSync(TOKEN_FILE, "utf-8"));
+    if (data.idToken && (!data.expiresAt || Date.now() < data.expiresAt)) {
+      cachedToken = data.idToken;
+      return cachedToken;
+    }
+  } catch {}
   try {
     const res = await fetch(TOKEN_URL);
     if (!res.ok) return cachedToken;

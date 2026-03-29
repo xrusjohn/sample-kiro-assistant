@@ -58,15 +58,29 @@ let widgetsEnabled = process.env.KIRO_WIDGETS !== "0";
 app.get("/api/widgets-enabled", (_req, res) => res.json(widgetsEnabled));
 
 // Get the current auth token (for server-side gateway calls)
-app.get("/api/auth/token", (_req, res) => {
-  // Read from a simple file that the UI writes to, or accept it via POST
-  const token = (app as any).__idToken;
-  if (token) res.json({ idToken: token });
-  else res.status(401).json({ error: "Not authenticated" });
+const TOKEN_FILE = join(process.env.HOME || "/tmp", ".kiro-auth-token");
+app.get("/api/auth/token", async (_req, res) => {
+  try {
+    const data = await readFile(TOKEN_FILE, "utf-8");
+    const parsed = JSON.parse(data);
+    // Check if expired
+    if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+      res.status(401).json({ error: "Token expired" });
+    } else {
+      res.json(parsed);
+    }
+  } catch {
+    res.status(401).json({ error: "Not authenticated" });
+  }
 });
-app.post("/api/auth/token", (req, res) => {
-  (app as any).__idToken = req.body?.idToken;
-  res.json({ ok: true });
+app.post("/api/auth/token", async (req, res) => {
+  try {
+    const { writeFile } = await import("fs/promises");
+    await writeFile(TOKEN_FILE, JSON.stringify(req.body), "utf-8");
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // OAuth callback — exchanges code for tokens and stores them
