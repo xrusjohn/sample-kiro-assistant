@@ -73,6 +73,15 @@ async function processTokens(data: { id_token?: string; access_token?: string; r
   saveToStorage();
   notify();
   scheduleRefresh();
+
+  // Push to server for server-side gateway calls
+  if (state.idToken) {
+    fetch("/api/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken: state.idToken }),
+    }).catch(() => {});
+  }
 }
 
 export async function login(): Promise<boolean> {

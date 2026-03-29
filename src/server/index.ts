@@ -57,6 +57,18 @@ let widgetsEnabled = process.env.KIRO_WIDGETS !== "0";
 
 app.get("/api/widgets-enabled", (_req, res) => res.json(widgetsEnabled));
 
+// Get the current auth token (for server-side gateway calls)
+app.get("/api/auth/token", (_req, res) => {
+  // Read from a simple file that the UI writes to, or accept it via POST
+  const token = (app as any).__idToken;
+  if (token) res.json({ idToken: token });
+  else res.status(401).json({ error: "Not authenticated" });
+});
+app.post("/api/auth/token", (req, res) => {
+  (app as any).__idToken = req.body?.idToken;
+  res.json({ ok: true });
+});
+
 // OAuth callback — exchanges code for tokens and stores them
 app.get("/auth/callback", (_req, res) => {
   res.send(`<!DOCTYPE html><html><body>
