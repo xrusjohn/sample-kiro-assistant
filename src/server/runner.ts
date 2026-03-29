@@ -77,6 +77,7 @@ export function createAcpRunner(opts: {
   let streamingStarted = false;
   let accumulatedText = "";
   let pendingPrompt: string | null = null;
+  let loadTimeout: ReturnType<typeof setTimeout> | null = null;
   let firstPrompt = true;
   let readyResolve: () => void;
   const toolsUsedThisTurn = new Set<string>();
@@ -165,6 +166,15 @@ export function createAcpRunner(opts: {
     if (msg.id && msg.result?.agentInfo) {
       if (resumeSessionId) {
         writeRpc("session/load", { sessionId: resumeSessionId, mcpServers: [] });
+        // session/load can hang in some kiro-cli versions — fall back after 10s
+        loadTimeout = setTimeout(() => {
+          if (!acpSessionId) {
+            console.warn("[kiro-acp] session/load timed out after 10s, falling back to session/new");
+            const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
+            if (model) params.model = model;
+            writeRpc("session/new", params);
+          }
+        }, 10_000);
       } else {
         const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
         if (model) params.model = model;
@@ -177,6 +187,7 @@ export function createAcpRunner(opts: {
     if (msg.id && msg.result && !acpSessionId) {
       const sid = msg.result.sessionId ?? resumeSessionId;
       if (sid) {
+        if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
         acpSessionId = sid;
         onSessionUpdate?.({ kiroConversationId: acpSessionId! });
         readyResolve();
