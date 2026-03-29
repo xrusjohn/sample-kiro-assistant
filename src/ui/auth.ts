@@ -82,21 +82,56 @@ export async function login(): Promise<boolean> {
   if (!popup) return false;
 
   return new Promise((resolve) => {
-    const handler = (event: MessageEvent) => {
+    // Listen for postMessage from callback page
+    const msgHandler = (event: MessageEvent) => {
       if (event.data?.type === "AUTH_CALLBACK") {
-        window.removeEventListener("message", handler);
-        clearInterval(checkClosed);
-        if (event.data.code) {
-          exchangeCode(event.data.code).then(resolve);
-        } else {
-          resolve(false);
-        }
+        cleanup();
+        // Callback page already stored tokens in localStorage — reload them
+        state = loadFromStorage();
+        notify();
+        scheduleRefresh();
+        resolve(!!state.idToken);
       }
     };
-    window.addEventListener("message", handler);
-    const checkClosed = setInterval(() => {
-      if (popup.closed) { clearInterval(checkClosed); window.removeEventListener("message", handler); resolve(false); }
+
+    // Also poll localStorage in case postMessage doesn't work
+    const storageCheck = setInterval(() => {
+      const fresh = loadFromStorage();
+      if (fresh.idToken && fresh.idToken !== state.idToken) {
+        cleanup();
+        state = fresh;
+        notify();
+        scheduleRefresh();
+        resolve(true);
+      }
     }, 1000);
+
+    const checkClosed = setInterval(() => {
+      if (popup.closed) {
+        // Give localStorage a moment to sync
+        setTimeout(() => {
+          cleanup();
+          const fresh = loadFromStorage();
+          if (fresh.idToken) {
+            state = fresh;
+            notify();
+            scheduleRefresh();
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        }, 500);
+      }
+    }, 1000);
+
+    const cleanup = () => {
+      window.removeEventListener("message", msgHandler);
+      clearInterval(storageCheck);
+      clearInterval(checkClosed);
+    };
+
+    window.addEventListener("message", msgHandler);
+    setTimeout(() => { cleanup(); popup.close(); resolve(false); }, 120000);
   });
 }
 

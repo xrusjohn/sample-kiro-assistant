@@ -57,19 +57,79 @@ let widgetsEnabled = process.env.KIRO_WIDGETS !== "0";
 
 app.get("/api/widgets-enabled", (_req, res) => res.json(widgetsEnabled));
 
-// OAuth callback — serves a page that extracts the code and posts it to the parent window
+// OAuth callback — exchanges code for tokens and stores them
 app.get("/auth/callback", (_req, res) => {
-  res.send(`<!DOCTYPE html><html><body><script>
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const error = params.get("error");
-    if (window.opener) {
-      window.opener.postMessage({ type: "AUTH_CALLBACK", code, error }, "*");
-      document.body.innerHTML = "<h3>✓ Authenticated — you can close this tab</h3>";
-    } else {
-      document.body.innerHTML = "<h3>Code: " + (code || error || "none") + "</h3><p>Copy this code back to the console.</p>";
+  res.send(`<!DOCTYPE html><html><body>
+<div id="status" style="font-family:system-ui;padding:40px;text-align:center">
+  <h3>Authenticating...</h3>
+</div>
+<script>
+(async () => {
+  const status = document.getElementById("status");
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  const error = params.get("error");
+
+  if (error) {
+    status.innerHTML = "<h3 style='color:red'>✗ " + error + "</h3>";
+    return;
+  }
+  if (!code) {
+    status.innerHTML = "<h3 style='color:red'>✗ No code received</h3>";
+    return;
+  }
+
+  try {
+    const res = await fetch("https://xrusjohn-demo.auth.us-east-1.amazoncognito.com/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        client_id: "434321f0nj66bmo12i2qg7eled",
+        redirect_uri: window.location.origin + "/auth/callback",
+        code: code,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      status.innerHTML = "<h3 style='color:red'>✗ " + data.error + "</h3>";
+      return;
     }
-  </script></body></html>`);
+
+    // Decode ID token for user info
+    let email = null, username = null;
+    if (data.id_token) {
+      try {
+        const claims = JSON.parse(atob(data.id_token.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));
+        email = claims.email || null;
+        username = (claims["cognito:username"] || "").replace("Midway_", "") || null;
+      } catch {}
+    }
+
+    // Store in localStorage (shared with main app)
+    localStorage.setItem("kiro-auth", JSON.stringify({
+      idToken: data.id_token || null,
+      accessToken: data.access_token || null,
+      refreshToken: data.refresh_token || null,
+      expiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : null,
+      email: email,
+      username: username,
+    }));
+
+    status.innerHTML = "<h3 style='color:green'>✓ Signed in as " + (username || email || "user") + "</h3><p>You can close this tab.</p>";
+
+    // Notify opener if available
+    if (window.opener) {
+      window.opener.postMessage({ type: "AUTH_CALLBACK", success: true }, "*");
+    }
+
+    // Auto-close after 1.5s
+    setTimeout(() => { try { window.close(); } catch {} }, 1500);
+  } catch (e) {
+    status.innerHTML = "<h3 style='color:red'>✗ " + e.message + "</h3>";
+  }
+})();
+</script></body></html>`);
 });
 app.post("/api/widgets-enabled", (req, res) => {
   widgetsEnabled = req.body?.enabled !== false;
