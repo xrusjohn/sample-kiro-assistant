@@ -8,7 +8,7 @@ import { extname, join, basename, resolve, normalize } from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 
-import { handleClientEvent, sessions, setBroadcast } from "./session-handler.js";
+import { handleClientEvent, sessions, setBroadcast, abortAll } from "./session-handler.js";
 import { generateSessionTitle, normalizeWorkingDirectory, enhancedEnv } from "./util.js";
 import { loadAssistantSettings, saveAssistantSettings } from "./app-settings.js";
 import { SETTINGS_PATH } from "./paths.js";
@@ -17,6 +17,7 @@ import { getKiroMcpSettingsPath, loadKiroMcpServers, setKiroMcpServerDisabled, e
 import { ensureWorkspaceRoot } from "../electron/libs/workspace.js";
 import { loadSkills } from "../electron/libs/skill-loader.js";
 import { models as availableModels, DEFAULT_MODEL_ID } from "../shared/models.js";
+import { killStale, cleanup as cleanupPidFile } from "./pid-tracker.js";
 
 import type { ServerEvent } from "../electron/types.js";
 
@@ -282,7 +283,22 @@ app.get("/{*splat}", (_req, res) => {
 process.on("uncaughtException", (err) => console.error("Uncaught:", err.message));
 process.on("unhandledRejection", (err) => console.error("Unhandled rejection:", err));
 
+// --- Graceful shutdown ---
+let shuttingDown = false;
+function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n[${signal}] Shutting down — aborting all ACP processes...`);
+  abortAll();
+  cleanupPidFile();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 5000);
+}
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+
 async function boot() {
+  killStale();
   const templatePath = join(import.meta.dirname, "../../resources/agent_config.template.json");
   await ensureAgentConfigDefaults(templatePath);
   ensureWorkspaceRoot();

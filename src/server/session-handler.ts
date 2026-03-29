@@ -15,6 +15,13 @@ let broadcastFn: BroadcastFn = () => {};
 
 export function setBroadcast(fn: BroadcastFn) { broadcastFn = fn; }
 
+export function abortAll() {
+  for (const [id, handle] of runnerHandles) {
+    handle.abort();
+    runnerHandles.delete(id);
+  }
+}
+
 const resolveModelId = () => loadAssistantSettings().defaultModel?.trim() || DEFAULT_MODEL_ID;
 
 function emit(event: ServerEvent) {

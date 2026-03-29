@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { enhancedEnv, normalizeWorkingDirectory } from "./util.js";
 import { resolveKiroCliBinary } from "../electron/libs/kiro-cli.js";
+import { addPid, removePid } from "./pid-tracker.js";
 import type { ServerEvent } from "../electron/types.js";
 import type { Session } from "../electron/libs/session-store.js";
 
@@ -60,6 +61,8 @@ export function createAcpRunner(opts: {
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...enhancedEnv, NO_COLOR: "1", CLICOLOR: "0", KIRO_CLI_DISABLE_PAGER: "1" }
   });
+
+  if (child.pid) addPid(child.pid, session.id);
 
   // Helper to write an RPC message and emit a debug event
   const writeRpc = (method: string, params: Record<string, unknown> = {}) => {
@@ -258,6 +261,7 @@ export function createAcpRunner(opts: {
   });
 
   child.on("close", (code) => {
+    if (child.pid) removePid(child.pid);
     if (!aborted && code !== 0) {
       onEvent({ type: "session.status", payload: { sessionId: session.id, status: "error", title: session.title, cwd: session.cwd, error: `kiro-cli exited with code ${code}` } });
     }

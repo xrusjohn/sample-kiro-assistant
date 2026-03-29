@@ -1,5 +1,12 @@
 # Multi-Session Support — Tasks
 
+## Phase 0: Process Cleanup (Prerequisite)
+
+- [ ] 0a. Create `src/server/pid-tracker.ts` — track child PIDs in `/tmp/kiro-assistant-pids.json`, with add/remove/killStale/cleanup methods
+- [ ] 0b. Integrate pid-tracker into `createAcpRunner` (register on spawn, unregister on child exit)
+- [ ] 0c. Add graceful shutdown handler in `src/server/index.ts` — catch SIGINT/SIGTERM, abort all runners, clean PID file, exit
+- [ ] 0d. Call `killStale()` on server boot before starting the HTTP listener
+
 ## Phase 1: Runner Lifecycle Manager
 
 - [ ] 1. Create `src/server/runner-manager.ts` with `RunnerManager` class

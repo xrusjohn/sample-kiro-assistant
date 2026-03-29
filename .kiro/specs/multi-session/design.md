@@ -150,6 +150,32 @@ KIRO_MAX_SESSIONS=5
 KIRO_IDLE_TIMEOUT_MINUTES=30
 ```
 
+## Process Cleanup (Prerequisite)
+
+Before multi-session, we need robust child process lifecycle management to prevent orphan `kiro-cli acp` processes.
+
+### Layer 1: Graceful Shutdown
+
+Server catches `SIGINT`/`SIGTERM`, iterates all runner handles, aborts each, then exits.
+
+### Layer 2: PID File Tracking (`src/server/pid-tracker.ts`)
+
+```typescript
+interface TrackedProcess {
+  pid: number;
+  sessionId: string;
+  spawnedAt: number;
+}
+```
+
+- On spawn: write child PID + sessionId to `/tmp/kiro-assistant-pids.json`
+- On child exit (normal or abort): remove PID from file
+- On server boot: read file, check if any PIDs are still alive (`process.kill(pid, 0)`), kill stale ones with `SIGTERM`→`SIGKILL` escalation, then clean the file
+
+### Layer 3: Default spawn behavior
+
+`child_process.spawn` defaults to `detached: false`, so children share the parent's process group. No change needed.
+
 ## Error Handling
 
 - ACP process crash: existing `child.on("close")` handler already emits error status. Manager removes entry from active map.

@@ -1,62 +1,77 @@
-# Multi-Session Support — Requirements
+# Requirements: Multi-Session Support
 
 ## Overview
 
 Enable users to run multiple concurrent sessions in Kiro Assistant's web server mode, each backed by its own kiro-cli ACP process, with proper lifecycle management and resource controls.
 
-## User Stories
+## Requirements
 
-### US-1: Concurrent Active Sessions
+### Requirement 1: Concurrent Active Sessions
 
-WHEN a user starts a new session while another session is actively running
-THE SYSTEM SHALL spawn a separate kiro-cli ACP process for the new session and allow both to stream responses concurrently
+**User Story:** As a user, I want to start a new session while another is actively running, so that I can work on multiple tasks in parallel.
 
-### US-2: Session Switching Without Loss
+**Acceptance Criteria:**
+- [ ] The system spawns a separate kiro-cli ACP process for each new session
+- [ ] Two or more sessions can stream agent responses simultaneously without interference
+- [ ] Each session maintains its own independent conversation state
 
-WHEN a user switches between sessions in the sidebar
-THE SYSTEM SHALL display the selected session's conversation history and streaming state without interrupting any background sessions
+### Requirement 2: Session Switching Without Loss
 
-### US-3: Session Status Visibility
+**User Story:** As a user, I want to switch between sessions in the sidebar without losing any conversation state, so that I can context-switch freely.
 
-WHEN multiple sessions exist with different states (running, idle, completed, error)
-THE SYSTEM SHALL display a visual status indicator on each session in the sidebar so the user can see which sessions are active at a glance
+**Acceptance Criteria:**
+- [ ] Selecting a session in the sidebar displays that session's full conversation history
+- [ ] The selected session's current streaming state is shown accurately
+- [ ] Switching sessions does not interrupt or affect any background sessions
 
-### US-4: Idle Session Lifecycle
+### Requirement 3: Session Status Visibility
 
-WHEN a session's ACP process has been idle (no prompts sent) for a configurable duration (default: 30 minutes)
-THE SYSTEM SHALL gracefully terminate the ACP process and mark the session as "suspended"
+**User Story:** As a user, I want to see the status of each session at a glance, so that I know which sessions are active, idle, or in an error state.
 
-WHEN a user sends a prompt to a suspended session
-THE SYSTEM SHALL spawn a new ACP process, attempt to resume via `session/load`, and deliver the prompt transparently
+**Acceptance Criteria:**
+- [ ] Each session in the sidebar displays a visual status indicator
+- [ ] Supported statuses include: running, idle, suspended, and error
+- [ ] Status indicators update in real time as session state changes
 
-### US-5: Maximum Concurrent Process Limit
+### Requirement 4: Idle Session Lifecycle
 
-WHEN the number of active ACP processes reaches a configurable maximum (default: 5)
-THE SYSTEM SHALL prevent starting new sessions and display a message indicating the limit has been reached
+**User Story:** As a user, I want idle sessions to be automatically suspended and transparently resumed, so that system resources are not wasted on inactive sessions.
 
-WHEN an active ACP process finishes or is terminated
-THE SYSTEM SHALL allow new sessions to be started again
+**Acceptance Criteria:**
+- [ ] Sessions whose ACP process has been idle for a configurable duration (default: 30 minutes) are gracefully terminated and marked as "suspended"
+- [ ] Sending a prompt to a suspended session spawns a new ACP process and attempts to resume via `session/load`
+- [ ] The resume process is transparent to the user — the prompt is delivered without extra manual steps
 
-### US-6: Session Resume After Server Restart
+### Requirement 5: Maximum Concurrent Process Limit
 
-WHEN the web server restarts and previously active sessions exist in the database
-THE SYSTEM SHALL NOT automatically respawn ACP processes
+**User Story:** As a user, I want the system to enforce a maximum number of concurrent ACP processes, so that the host machine's resources are protected.
 
-WHEN a user sends a prompt to a session whose ACP process is no longer running
-THE SYSTEM SHALL lazily respawn an ACP process and attempt `session/load` using the stored `kiroConversationId`
+**Acceptance Criteria:**
+- [ ] The system enforces a configurable maximum concurrent ACP process limit (default: 5)
+- [ ] When the limit is reached, new session creation is blocked and a clear message is displayed to the user
+- [ ] When an active ACP process finishes or is terminated, new sessions can be started again
 
-### US-7: Resource Monitoring
+### Requirement 6: Session Resume After Server Restart
 
-WHEN multiple ACP processes are running
-THE SYSTEM SHALL track memory and process count and expose this information via a REST endpoint (`GET /api/sessions/health`)
+**User Story:** As a user, I want my sessions to survive a server restart, so that I don't lose my work.
 
-## Acceptance Criteria
+**Acceptance Criteria:**
+- [ ] On server restart, ACP processes are NOT automatically respawned
+- [ ] Sending a prompt to a session whose ACP process is no longer running lazily respawns the process
+- [ ] The respawned process attempts `session/load` using the stored `kiroConversationId`
 
-- [ ] Two sessions can stream agent responses simultaneously without interference
-- [ ] Sidebar shows real-time status (running/idle/suspended/error) per session
-- [ ] Idle sessions are automatically suspended after the configured timeout
-- [ ] Suspended sessions transparently resume on next user prompt
-- [ ] Server enforces a maximum concurrent ACP process limit
-- [ ] After server restart, sessions resume lazily on first prompt
-- [ ] Health endpoint reports active process count and per-session status
-- [ ] No regressions to single-session workflow
+### Requirement 7: Resource Monitoring
+
+**User Story:** As a user or operator, I want to monitor the health of running sessions, so that I can detect resource issues early.
+
+**Acceptance Criteria:**
+- [ ] A REST endpoint (`GET /api/sessions/health`) exposes active process count and per-session status
+- [ ] Memory usage and process count are tracked while multiple ACP processes are running
+
+## Correctness Properties
+
+- CP-1: Two concurrent sessions streaming responses must never cross-contaminate each other's conversation data.
+- CP-2: The number of active ACP processes must never exceed the configured maximum limit.
+- CP-3: A suspended session, when prompted, must always attempt to resume before creating a fresh conversation.
+- CP-4: After server restart, no ACP processes are spawned until a user explicitly sends a prompt to a session.
+- CP-5: No regressions to the single-session workflow — existing single-session behavior must remain fully functional.
