@@ -8,7 +8,7 @@
   - Implement `getAll()`, `get(id)`, `getDefault()` methods
   - Support legacy `KIRO_CLI_BINARY` / `KIRO_AGENT` env vars as fallbacks for the Kiro agent (emit deprecation warning to console)
 
-- [-] 1b. Add environment variable documentation in `.env.example` or README:
+- [x] 1b. Add environment variable documentation in `.env.example` or README:
   - `KIRO_BINARY`, `CLAUDE_BINARY`, `DEFAULT_AGENT`
   - Mark `KIRO_AGENT` and `KIRO_CLI_BINARY` as deprecated
 
