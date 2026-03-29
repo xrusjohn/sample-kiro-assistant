@@ -18,6 +18,7 @@ import { ensureWorkspaceRoot } from "../electron/libs/workspace.js";
 import { loadSkills } from "../electron/libs/skill-loader.js";
 import { models as availableModels, DEFAULT_MODEL_ID } from "../shared/models.js";
 import { killStale, cleanup as cleanupPidFile } from "./pid-tracker.js";
+import { AgentRegistry } from "./agent-registry.js";
 
 import type { ServerEvent } from "../electron/types.js";
 
@@ -27,6 +28,7 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 const upload = multer({ dest: "/tmp/kiro-uploads" });
+const registry = new AgentRegistry();
 
 // --- WebSocket: event stream ---
 const clients = new Set<WebSocket>();
@@ -403,6 +405,12 @@ app.get("/api/skills", async (_req, res) => {
   }
 });
 
+app.get("/api/agents", async (_req, res) => {
+  await registry.checkAvailability();
+  const agents = registry.getAll().map(({ id, label, available }) => ({ id, label, available }));
+  res.json({ agents, default: registry.getDefault() });
+});
+
 // --- Serve static React build ---
 const staticDir = join(import.meta.dirname, "../../dist-react");
 app.use(express.static(staticDir));
@@ -436,6 +444,7 @@ async function boot() {
   const templatePath = join(import.meta.dirname, "../../resources/agent_config.template.json");
   await ensureAgentConfigDefaults(templatePath);
   ensureWorkspaceRoot();
+  await registry.checkAvailability();
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Kiro Assistant Web UI running at http://0.0.0.0:${PORT}`);
   });

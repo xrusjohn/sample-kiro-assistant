@@ -12,7 +12,7 @@
   - `KIRO_BINARY`, `CLAUDE_BINARY`, `DEFAULT_AGENT`
   - Mark `KIRO_AGENT` and `KIRO_CLI_BINARY` as deprecated
 
-- [ ] 1c. Add `GET /api/agents` endpoint in `src/server/index.ts`
+- [x] 1c. Add `GET /api/agents` endpoint in `src/server/index.ts`
   - Returns agent list with availability and default
   - Call `registry.checkAvailability()` on server start
 
