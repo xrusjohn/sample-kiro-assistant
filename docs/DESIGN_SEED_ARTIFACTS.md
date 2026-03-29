@@ -107,6 +107,36 @@ storage/persist({
 - [ ] Test: agent creates a design doc with diagram in sandbox mode
 - [ ] Decide on git workflow for code artifacts
 
+## Code Interpreter as Sandbox
+
+AgentCore Code Interpreter runs Python in a secure container with:
+- Pre-installed libraries + pip install support (PUBLIC network mode)
+- File I/O within the session
+- Streaming results
+- Long execution support
+
+This is the natural home for diagram rendering, data analysis, and any
+compute-heavy artifact generation. No Lambda needed — the interpreter IS
+the sandbox.
+
+**Open question**: Does the Code Interpreter container have graphviz
+installed? The `diagrams` Python library needs the `graphviz` system
+binary (`apt install graphviz`), not just the pip package. If not,
+we need either:
+1. A custom Code Interpreter image with graphviz pre-installed
+2. Fall back to Mermaid/D2 (JavaScript-based, no system deps)
+3. Build locally first, promote to Lambda with graphviz in the image
+
+## Next Steps
+
+- [ ] Verify: does AgentCore Code Interpreter have graphviz?
+- [ ] Build diagram rendering locally first (MCP tool wrapping `diagrams` library)
+- [ ] Write diagram skill based on existing eum-otp scripts
+- [ ] Build `storage/persist` abstraction (local + S3 backends)
+- [ ] Write environment-aware skills (local, sandbox, hybrid)
+- [ ] Test: promote local diagram tool to Code Interpreter
+- [ ] Test: promote to Lambda behind gateway if Code Interpreter lacks graphviz
+
 ---
 
 *Seed planted: 2026-03-29*

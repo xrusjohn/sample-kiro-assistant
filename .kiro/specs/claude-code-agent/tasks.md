@@ -2,7 +2,7 @@
 
 ## Phase 1: Agent Registry & Server Config
 
-- [ ] 1a. Create `src/server/agent-registry.ts` with `AgentDefinition` type and `AgentRegistry` class
+- [-] 1a. Create `src/server/agent-registry.ts` with `AgentDefinition` type and `AgentRegistry` class
   - Define Kiro and Claude Code entries with binary env vars and default args
   - Implement `checkAvailability()` using `which`/`where` (cross-platform) with short TTL cache (~30s)
   - Implement `getAll()`, `get(id)`, `getDefault()` methods
@@ -20,16 +20,18 @@
 
 - [ ] 2a. Update `src/server/runner.ts` — `createAcpRunner()` accepts `agent: AgentDefinition`
   - Replace hard-coded `kiro-cli` binary and args with `agent.resolvedBinary` and `agent.defaultArgs`
-  - Remove `KIRO_AGENT` and `KIRO_CLI_BINARY` reads (keep as deprecated fallback only)
+  - Update error messages (e.g., `child.on("close")`) to use agent label instead of hard-coded "kiro-cli"
+  - Legacy `KIRO_AGENT` and `KIRO_CLI_BINARY` reads removed from runner (handled by AgentRegistry fallback)
 
-- [ ] 2b. Add `agent_id` column to sessions DB table in `src/server/sessions.ts`
-  - Migration: `ALTER TABLE sessions ADD COLUMN agent_id TEXT NOT NULL DEFAULT 'kiro'`
-  - Update `Session` TypeScript type to include `agentId: string`
-  - Update all DB read/write paths to include `agent_id`
+- [ ] 2b. Add `agent_id` column to sessions DB table in `src/electron/libs/session-store.ts`
+  - Migration using existing pattern: `pragma table_info` check, then `ALTER TABLE sessions ADD COLUMN agent_id TEXT NOT NULL DEFAULT 'kiro'`
+  - Update `Session` and `StoredSession` TypeScript types to include `agentId: string`
+  - Update `createSession()`, `loadSessions()`, `getSession()`, and `persistSession()` to read/write `agent_id`
 
 - [ ] 2c. Update `src/server/runner-manager.ts` — add `agentId` to `RunnerEntry`
-  - Update `spawn()` and `getOrSpawn()` signatures to accept `agentId`
+  - Update existing `spawn()` and `getOrSpawn()` opts to accept `agentId`
   - Look up `AgentDefinition` from registry and pass to `createAcpRunner()`
+  - Store `agentId` in the `RunnerEntry` for tracking
 
 ## Phase 3: Session Handler & Event Types
 
@@ -66,6 +68,11 @@
 
 - [ ] 4d. Update session detail header component
   - Show agent name alongside session title
+
+- [ ] 4e. Update `src/ui/components/SettingsModal.tsx`
+  - Add "Default Agent" selector to the settings modal
+  - Read from and write to `appStore.defaultAgentId` / `appStore.setDefaultAgent()`
+  - Show unavailable agents as "(not installed)"
 
 ## Phase 5: Validation
 
