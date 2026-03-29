@@ -104,7 +104,7 @@ export function handleClientEvent(event: ClientEvent) {
     }
 
     manager.markActive(session.id);
-    sessions.updateSession(session.id, { status: "running", lastPrompt: event.payload.prompt });
+    sessions.updateSession(session.id, { lastPrompt: event.payload.prompt });
     emit({ type: "stream.user_prompt", payload: { sessionId: session.id, prompt: event.payload.prompt } });
 
     handle.sendPrompt(event.payload.prompt);
