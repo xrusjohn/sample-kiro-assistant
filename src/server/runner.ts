@@ -77,7 +77,6 @@ export function createAcpRunner(opts: {
   let streamingStarted = false;
   let accumulatedText = "";
   let pendingPrompt: string | null = null;
-  let loadTimeout: ReturnType<typeof setTimeout> | null = null;
   let firstPrompt = true;
   let readyResolve: () => void;
   const toolsUsedThisTurn = new Set<string>();
@@ -162,43 +161,33 @@ export function createAcpRunner(opts: {
 
   // --- Handle ACP messages ---
   const handleMessage = (msg: any) => {
-    // Response to initialize
+    // Response to initialize → always create new session
+    // (session/load is advertised but hangs in current kiro-cli versions)
     if (msg.id && msg.result?.agentInfo) {
-      if (resumeSessionId) {
-        writeRpc("session/load", { sessionId: resumeSessionId, mcpServers: [] });
-        // session/load can hang in some kiro-cli versions — fall back after 10s
-        loadTimeout = setTimeout(() => {
-          if (!acpSessionId) {
-            console.warn("[kiro-acp] session/load timed out after 10s, falling back to session/new");
-            const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
-            if (model) params.model = model;
-            writeRpc("session/new", params);
-          }
-        }, 10_000);
-      } else {
-        const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
-        if (model) params.model = model;
-        writeRpc("session/new", params);
-      }
+      const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
+      if (model) params.model = model;
+      writeRpc("session/new", params);
       return;
     }
 
-    // Response to session/new or session/load
+    // Response to session/new
     if (msg.id && msg.result && !acpSessionId) {
-      const sid = msg.result.sessionId ?? resumeSessionId;
+      const sid = msg.result.sessionId;
       if (sid) {
-        if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null; }
         acpSessionId = sid;
         onSessionUpdate?.({ kiroConversationId: acpSessionId! });
+        // Finish the "Connecting..." turn
+        emitDelta(" Connected ✓\n");
+        finishTurn();
         readyResolve();
         if (pendingPrompt) { doSendPrompt(pendingPrompt); pendingPrompt = null; }
         return;
       }
     }
 
-    // session/load failed — fall back to session/new
-    if (msg.error && resumeSessionId && !acpSessionId) {
-      console.warn("[kiro-acp] session/load failed, falling back:", msg.error.message ?? msg.error);
+    // session/new failed
+    if (msg.error && !acpSessionId) {
+      console.warn("[kiro-acp] session/new failed:", msg.error.message ?? msg.error);
       const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
       if (model) params.model = model;
       writeRpc("session/new", params);
@@ -279,6 +268,7 @@ export function createAcpRunner(opts: {
   });
 
   // --- Start ACP handshake ---
+  emitDelta("⏳ Connecting to agent...\n");
   writeRpc("initialize", {
     protocolVersion: 1,
     clientCapabilities: { fs: { readTextFile: true, writeTextFile: true }, terminal: true },
