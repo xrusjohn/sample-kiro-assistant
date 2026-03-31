@@ -327,23 +327,28 @@ app.get("/api/files/preview", async (req, res) => {
     const ext = extname(resolved).toLowerCase();
     if (ext === ".md" || ext === ".markdown") {
       const content = await readFile(resolved, "utf-8");
-      const escaped = content
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/`([^`]+)`/g, '<code style="background:#f0f0f0;padding:2px 4px;border-radius:3px">$1</code>')
-        .replace(/^- (.+)$/gm, '<li>$1</li>')
-        .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-        .replace(/\n{2,}/g, '<br><br>')
-        .replace(/\n/g, '<br>');
+      // Serve a self-contained page that renders markdown client-side with dark theme
+      const escaped = content.replace(/`/g, "\\`").replace(/\$/g, "\\$");
       res.type("html").send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${basename(resolved)}</title>
-<style>body{max-width:800px;margin:40px auto;padding:0 20px;font-family:-apple-system,system-ui,sans-serif;line-height:1.6;color:#333}
-h1,h2,h3{margin-top:1.5em}code{font-size:0.9em}table{border-collapse:collapse;width:100%}
-th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f5f5f5}</style>
-</head><body>${escaped}</body></html>`);
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"><\/script>
+<style>
+body{max-width:800px;margin:40px auto;padding:0 20px;font-family:-apple-system,system-ui,sans-serif;line-height:1.7;color:#e0e0e0;background:#1a1a2e}
+h1,h2,h3{color:#f0f0f0;margin-top:1.5em;border-bottom:1px solid #333;padding-bottom:0.3em}
+a{color:#6ea8fe}code{font-size:0.9em;background:#2d2d44;padding:2px 6px;border-radius:4px;color:#e0e0e0}
+pre{background:#2d2d44;padding:16px;border-radius:8px;overflow-x:auto}pre code{background:none;padding:0}
+table{border-collapse:collapse;width:100%;margin:1em 0}th,td{border:1px solid #444;padding:8px 12px;text-align:left}
+th{background:#2d2d44;color:#f0f0f0}tr:nth-child(even){background:#1f1f35}
+blockquote{border-left:3px solid #555;margin:1em 0;padding:0.5em 1em;color:#aaa;background:#1f1f35;border-radius:0 4px 4px 0}
+li{margin:0.3em 0}hr{border:none;border-top:1px solid #333;margin:2em 0}
+img{max-width:100%;border-radius:8px}
+</style></head><body><div id="content"></div>
+<script>
+const md = \`${escaped}\`;
+document.getElementById("content").innerHTML = marked.parse(md);
+document.querySelectorAll("pre code").forEach(b => hljs.highlightElement(b));
+<\/script></body></html>`);
     } else {
       res.sendFile(resolved);
     }
