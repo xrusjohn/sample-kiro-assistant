@@ -306,6 +306,50 @@ app.get("/api/files", async (req, res) => {
   } catch { res.status(404).send("Not found"); }
 });
 
+// Force-download a file
+app.get("/api/files/download", async (req, res) => {
+  const filePath = req.query.path as string;
+  if (!filePath) { res.status(400).send("Missing path"); return; }
+  const resolved = resolve(filePath);
+  try {
+    await access(resolved, constants.R_OK);
+    res.download(resolved, basename(resolved));
+  } catch { res.status(404).send("Not found"); }
+});
+
+// Preview a file in the browser — renders .md as HTML, others served raw
+app.get("/api/files/preview", async (req, res) => {
+  const filePath = req.query.path as string;
+  if (!filePath) { res.status(400).send("Missing path"); return; }
+  const resolved = resolve(filePath);
+  try {
+    await access(resolved, constants.R_OK);
+    const ext = extname(resolved).toLowerCase();
+    if (ext === ".md" || ext === ".markdown") {
+      const content = await readFile(resolved, "utf-8");
+      const escaped = content
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background:#f0f0f0;padding:2px 4px;border-radius:3px">$1</code>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
+        .replace(/\n{2,}/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+      res.type("html").send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${basename(resolved)}</title>
+<style>body{max-width:800px;margin:40px auto;padding:0 20px;font-family:-apple-system,system-ui,sans-serif;line-height:1.6;color:#333}
+h1,h2,h3{margin-top:1.5em}code{font-size:0.9em}table{border-collapse:collapse;width:100%}
+th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f5f5f5}</style>
+</head><body>${escaped}</body></html>`);
+    } else {
+      res.sendFile(resolved);
+    }
+  } catch { res.status(404).send("Not found"); }
+});
+
 app.post("/api/export-session", async (req, res) => {
   try {
     const { filename, content } = req.body;

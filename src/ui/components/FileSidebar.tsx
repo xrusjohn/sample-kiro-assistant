@@ -297,13 +297,23 @@ export function FileSidebar({
         <div className="flex items-center gap-1">
           <button
             className="rounded-lg p-2 text-ink-500 hover:bg-ink-900/10 hover:text-ink-700 transition-colors"
-            onClick={() => onOpenExternal(file)}
-            title="Open in default app"
+            onClick={() => window.open(`/api/files/preview?path=${encodeURIComponent(file.path)}`, "_blank")}
+            title="Preview in new tab"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-              <polyline points="15 3 21 3 21 9" />
-              <line x1="10" y1="14" x2="21" y2="3" />
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+          <button
+            className="rounded-lg p-2 text-ink-500 hover:bg-ink-900/10 hover:text-ink-700 transition-colors"
+            onClick={() => window.open(`/api/files/download?path=${encodeURIComponent(file.path)}`, "_blank")}
+            title="Download"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
           </button>
           <button
@@ -383,12 +393,20 @@ export function FileSidebar({
               </p>
             </div>
             {content !== '__not_found__' && (
-              <button
-                className="mt-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
-                onClick={() => onOpenExternal(file)}
-              >
-                Open with Default App
-              </button>
+              <div className="flex gap-2 mt-2">
+                <button
+                  className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
+                  onClick={() => window.open(`/api/files/preview?path=${encodeURIComponent(file.path)}`, "_blank")}
+                >
+                  Preview
+                </button>
+                <button
+                  className="rounded-xl border border-ink-900/20 px-4 py-2 text-sm font-medium text-ink-700 hover:bg-surface-tertiary transition-colors"
+                  onClick={() => window.open(`/api/files/download?path=${encodeURIComponent(file.path)}`, "_blank")}
+                >
+                  Download
+                </button>
+              </div>
             )}
           </div>
         )}
