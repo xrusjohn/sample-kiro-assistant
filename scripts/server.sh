@@ -21,7 +21,7 @@ case "${1:-start}" in
 
     echo "Starting $SESSION in tmux on port $PORT..."
     tmux new-session -d -s "$SESSION" -c "$DIR" \
-      "PORT=$PORT node dist-server/server/index.js; echo '[exited]'; read"
+      "while true; do PORT=$PORT node dist-server/server/index.js; EC=\$?; echo \"[exited code=\$EC]\"; if [ \$EC -ne 0 ]; then echo 'Press Enter to restart or Ctrl-C to quit'; read; fi; echo '[restarting...]'; sleep 1; done"
 
     # Wait for server to be ready
     for i in $(seq 1 15); do

@@ -418,6 +418,73 @@ app.get("/api/agents", async (_req, res) => {
   res.json({ agents, default: registry.getDefault() });
 });
 
+// --- Server status & safe restart ---
+const SERVER_BOOT_TIME = Date.now();
+
+app.get("/api/server/status", (_req, res) => {
+  const health = manager.getHealth();
+  const uptimeMs = Date.now() - SERVER_BOOT_TIME;
+  res.json({
+    uptime: uptimeMs,
+    uptimeHuman: `${Math.floor(uptimeMs / 3600000)}h ${Math.floor((uptimeMs % 3600000) / 60000)}m`,
+    pid: process.pid,
+    nodeVersion: process.version,
+    memoryMB: Math.round(process.memoryUsage.call(process).rss / 1048576),
+    sessions: health,
+    port: PORT,
+  });
+});
+
+app.post("/api/server/restart", async (_req, res) => {
+  // Graceful restart: save all session state, notify clients, then exit.
+  // tmux (server.sh) will respawn the process automatically.
+  const health = manager.getHealth();
+  console.log(`[restart] Graceful restart requested — ${health.activeProcesses} active sessions`);
+
+  // Notify all WS clients so the UI can show a reconnecting state
+  const restartEvent: ServerEvent = { type: "server.restarting", payload: { reason: "user_requested" } };
+  const payload = JSON.stringify(restartEvent);
+  for (const ws of clients) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(payload);
+  }
+
+  res.json({ ok: true, message: "Server restarting...", sessionsAborted: health.activeProcesses });
+
+  // Give the response and WS messages time to flush
+  setTimeout(() => {
+    shutdown("RESTART");
+  }, 500);
+});
+
+// --- Downloads file server ---
+import { readdir, stat } from "fs/promises";
+import { homedir } from "os";
+
+const DOWNLOADS_DIR = process.env.KIRO_DOWNLOADS_DIR ?? join(homedir(), "Downloads");
+
+app.get("/downloads", async (_req, res) => {
+  try {
+    const entries = await readdir(DOWNLOADS_DIR, { withFileTypes: true });
+    const files = await Promise.all(
+      entries.filter(e => e.isFile()).map(async (e) => {
+        const s = await stat(join(DOWNLOADS_DIR, e.name));
+        return { name: e.name, size: s.size, modified: s.mtime.toISOString() };
+      })
+    );
+    files.sort((a, b) => b.modified.localeCompare(a.modified));
+    res.json({ dir: DOWNLOADS_DIR, files });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/downloads/:filename", async (req, res) => {
+  const safe = basename(req.params.filename);
+  const filePath = join(DOWNLOADS_DIR, safe);
+  try {
+    await access(filePath, constants.R_OK);
+    res.download(filePath);
+  } catch { res.status(404).send("Not found"); }
+});
+
 // --- Serve static React build ---
 const staticDir = join(import.meta.dirname, "../../dist-react");
 app.use(express.static(staticDir));

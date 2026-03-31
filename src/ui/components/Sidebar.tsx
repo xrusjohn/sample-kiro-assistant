@@ -3,6 +3,40 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useAppStore } from "../store/useAppStore";
 import { login, logout, onAuthChange, isAuthenticated, timeToExpiry } from "../auth";
 
+function ServerStatus() {
+  const [status, setStatus] = useState<{ uptime: number; uptimeHuman: string; memoryMB: number; pid: number; sessions: { activeProcesses: number } } | null>(null);
+  const [restarting, setRestarting] = useState(false);
+
+  useEffect(() => {
+    const poll = () => fetch("/api/server/status").then(r => r.json()).then(setStatus).catch(() => setStatus(null));
+    poll();
+    const t = setInterval(poll, 15000);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleRestart = async () => {
+    if (!confirm("Restart the server? Active sessions will reconnect automatically.")) return;
+    setRestarting(true);
+    try { await fetch("/api/server/restart", { method: "POST" }); } catch { /* server is dying, expected */ }
+  };
+
+  if (restarting) return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-center text-xs text-amber-600 animate-pulse">
+      ⟳ Restarting server...
+    </div>
+  );
+
+  return (
+    <div className="rounded-xl border border-ink-900/10 bg-surface-tertiary/40 px-3 py-2 flex items-center justify-between">
+      <div className="text-[10px] text-muted leading-relaxed">
+        <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${status ? "bg-emerald-400" : "bg-red-400"}`} />
+        {status ? `Up ${status.uptimeHuman} · ${status.memoryMB}MB · ${status.sessions.activeProcesses} agents` : "Server offline"}
+      </div>
+      <button onClick={handleRestart} className="text-[10px] text-muted hover:text-accent ml-2 shrink-0" title="Restart server">⟳</button>
+    </div>
+  );
+}
+
 interface SidebarProps {
   connected: boolean;
   onNewSession: () => void;
@@ -258,6 +292,7 @@ export function Sidebar({
           ⚙️ Settings
         </button>
       </div>
+      <ServerStatus />
       <div className="mt-2">
         {authUser ? (
           <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-3 py-2">

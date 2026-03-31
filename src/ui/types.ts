@@ -54,7 +54,8 @@ export type ServerEvent =
   | { type: "runner.error"; payload: { sessionId?: string; message: string } }
   | { type: "session.metadata"; payload: { sessionId: string; contextUsagePercent?: number; creditsUsed?: number; turnDurationMs?: number } }
   | { type: "debug.acp"; payload: { sessionId?: string; direction: "send" | "recv"; message: string; timestamp: number } }
-  | { type: "agents.list"; payload: { agents: AgentInfo[] } };
+  | { type: "agents.list"; payload: { agents: AgentInfo[] } }
+  | { type: "server.restarting"; payload: { reason: string } };
 
 // Client -> Server events
 export type ClientEvent =
