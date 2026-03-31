@@ -227,7 +227,7 @@ function extractFilesFromMessage(msg: StreamMessage, sessionId: string, cwd?: st
     }
 
     const msgStr = JSON.stringify(msg);
-    const binaryFileExtensions = /(?:^|[\s"'(])([/\w][\w/.-]*\.(xlsx|xls|xlsm|xlsb|csv|pdf|docx|doc|pptx|ppt|png|jpg|jpeg|gif|svg|zip|tar|gz))(?:[\s"'),]|$)/gi;
+    const binaryFileExtensions = /(?:^|["'(])([/\w][\w /&.,-]*\.(xlsx|xls|xlsm|xlsb|csv|pdf|docx|doc|pptx|ppt|png|jpg|jpeg|gif|svg|zip|tar|gz|md|markdown))(?:["'),]|$)/gi;
     let binaryMatch;
     let regexKind: CreatedFile["kind"] = msg.type === "assistant" ? "created" : "accessed";
     if (msg.type === "user" && Array.isArray(msg.message.content)) {
