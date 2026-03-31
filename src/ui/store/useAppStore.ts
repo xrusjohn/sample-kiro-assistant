@@ -31,6 +31,7 @@ export type SessionView = {
   creditsUsed?: number;
   hasRunner?: boolean;
   agentId?: string;
+  lastActivityAt?: number; // timestamp of last message or status change
 };
 
 export type AcpDebugEntry = {
@@ -485,6 +486,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         const { sessionId, status, title, cwd } = event.payload;
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
+          const now = Date.now();
           return {
             sessions: {
               ...state.sessions,
@@ -493,7 +495,8 @@ export const useAppStore = create<AppState>((set, get) => ({
                 status,
                 title: title ?? existing.title,
                 cwd: cwd ?? existing.cwd,
-                updatedAt: Date.now(),
+                updatedAt: now,
+                lastActivityAt: now,
                 hasRunner: status === "running" ? true : existing.hasRunner,
               }
             }
@@ -555,7 +558,8 @@ export const useAppStore = create<AppState>((set, get) => ({
               [sessionId]: {
                 ...existing,
                 messages: [...existing.messages, message],
-                createdFiles: updatedFiles
+                createdFiles: updatedFiles,
+                lastActivityAt: Date.now()
               }
             }
           };

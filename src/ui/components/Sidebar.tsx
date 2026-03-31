@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useAppStore } from "../store/useAppStore";
+import type { SessionView } from "../store/useAppStore";
 import { login, logout, onAuthChange, isAuthenticated, timeToExpiry } from "../auth";
 
 function ServerStatus() {
@@ -87,6 +88,39 @@ export function Sidebar({
     return stripped || cwd;
   };
 
+  const STUCK_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
+
+  // Tick every 30s so stuck detection updates without new events
+  const [, setTick2] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick2(n => n + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const isStuck = useCallback((session: SessionView) => {
+    if (session.status !== "running") return false;
+    if (session.permissionRequests.length > 0) return false; // waiting on user, not stuck
+    const lastActivity = session.lastActivityAt ?? session.updatedAt ?? session.createdAt ?? 0;
+    return Date.now() - lastActivity > STUCK_THRESHOLD_MS;
+  }, []);
+
+  const [unsticking, setUnsticking] = useState<string | null>(null);
+
+  const handleUnstick = useCallback(async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setUnsticking(sessionId);
+    try {
+      await fetch(`/api/sessions/${sessionId}/restart`, { method: "POST" });
+      // Update local state to idle so the UI reflects immediately
+      useAppStore.setState((state) => {
+        const s = state.sessions[sessionId];
+        if (!s) return {};
+        return { sessions: { ...state.sessions, [sessionId]: { ...s, status: "idle" as const, hasRunner: false, lastActivityAt: Date.now() } } };
+      });
+    } catch { /* ignore */ }
+    setUnsticking(null);
+  }, []);
+
   const sessionList = useMemo(() => {
     const list = Object.values(sessions);
     list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
@@ -165,17 +199,15 @@ export function Sidebar({
                 ) : (
                   <div className="text-[12px] font-medium text-ink-800">
                     {(() => {
-                      // 🔴 red = error
-                      // 🟠 amber = agent busy (running, no permission request)
-                      // 🔵 blue = your turn (idle/completed with live runner)
-                      // ⚫ gray = no runner (disconnected / suspended)
+                      const stuck = isStuck(session);
                       const waitingOnUser = session.status === "running" && session.permissionRequests.length > 0;
-                      const dotClass = session.status === "error" ? "bg-red-500" :
+                      const dotClass = stuck ? "bg-red-500" :
+                        session.status === "error" ? "bg-red-500" :
                         waitingOnUser ? "bg-blue-400" :
                         session.status === "running" ? "bg-amber-400 animate-pulse" :
                         (session.status === "idle" || session.status === "completed") && session.hasRunner ? "bg-blue-400" :
                         "bg-slate-400";
-                      return <span className={`inline-block w-2 h-2 rounded-full mr-1.5 align-middle ${dotClass}`} />;
+                      return <span className={`inline-block w-2 h-2 rounded-full mr-1.5 align-middle ${dotClass}`} title={stuck ? "Session appears stuck" : session.status} />;
                     })()}
                     <span className="mr-1">{session.agentId === "claude-code" ? <span style={{color: "#e67e22"}}>✦</span> : "🤖"}</span>
                     {session.title}
@@ -184,6 +216,22 @@ export function Sidebar({
                 <div className="flex items-center justify-between mt-0.5 text-xs text-muted">
                   <span className="truncate">{formatCwd(session.cwd)}</span>
                 </div>
+                {isStuck(session) && (
+                  <button
+                    className="mt-1.5 flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-500/20 transition-colors"
+                    onClick={(e) => handleUnstick(session.id, e)}
+                    disabled={unsticking === session.id}
+                  >
+                    {unsticking === session.id ? (
+                      <span className="animate-spin">⟳</span>
+                    ) : (
+                      <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M1 4v6h6" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                      </svg>
+                    )}
+                    {unsticking === session.id ? "Restarting..." : "Stuck — Restart Agent"}
+                  </button>
+                )}
               </div>
               <DropdownMenu.Root>
                 <DropdownMenu.Trigger asChild>
