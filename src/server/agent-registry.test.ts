@@ -44,7 +44,7 @@ describe("AgentRegistry", () => {
   });
 
   it("marks agents as available when binaries are found", async () => {
-    mockExecFile({ "kiro-cli": "/usr/bin/kiro-cli", "claude": "/usr/bin/claude" });
+    mockExecFile({ "kiro-cli": "/usr/bin/kiro-cli", "claude-agent-acp": "/usr/bin/claude-agent-acp" });
     const registry = new AgentRegistry();
     await registry.checkAvailability();
 
@@ -55,7 +55,7 @@ describe("AgentRegistry", () => {
     expect(all[0].resolvedBinary).toBe("/usr/bin/kiro-cli");
     expect(all[1].id).toBe("claude-code");
     expect(all[1].available).toBe(true);
-    expect(all[1].resolvedBinary).toBe("/usr/bin/claude");
+    expect(all[1].resolvedBinary).toBe("/usr/bin/claude-agent-acp");
   });
 
   it("marks agents as unavailable when binaries are not found", async () => {

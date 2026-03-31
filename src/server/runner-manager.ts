@@ -77,6 +77,16 @@ export class RunnerManager {
       lastActivity: Date.now(),
       spawnedAt: Date.now(),
     });
+
+    // Auto-suspend entry when the process dies so getOrSpawn() will respawn
+    handle.onClose?.((code) => {
+      const entry = this.entries.get(opts.session.id);
+      if (entry && entry.handle === handle) {
+        console.log(`[runner-manager] session ${opts.session.id} process exited (code=${code}), marking suspended for auto-recovery`);
+        entry.state = "suspended";
+      }
+    });
+
     return handle;
   }
 

@@ -11,6 +11,7 @@ export type RunnerHandle = {
   abort: () => void;
   sendPrompt: (text: string) => void;
   ready: Promise<void>;
+  onClose?: (callback: (code: number | null) => void) => void;
 };
 
 type EmitFn = (event: ServerEvent) => void;
@@ -285,6 +286,8 @@ export function createAcpRunner(opts: {
     onEvent({ type: "runner.error", payload: { sessionId: session.id, message: error.message } });
   });
 
+  const closeCallbacks: Array<(code: number | null) => void> = [];
+
   child.on("close", (code, signal) => {
     const uptime = Date.now() - spawnedAt;
     if (child.pid) removePid(child.pid);
@@ -296,6 +299,7 @@ export function createAcpRunner(opts: {
     } else {
       console.log(`[${tag}] pid=${child.pid} exited cleanly after ${uptime}ms`);
     }
+    for (const cb of closeCallbacks) cb(code);
   });
 
   // --- Start ACP handshake ---
@@ -321,6 +325,9 @@ export function createAcpRunner(opts: {
       aborted = true;
       if (acpSessionId) writeRpc("session/cancel", { sessionId: acpSessionId });
       setTimeout(() => child.kill("SIGINT"), 500);
+    },
+    onClose(callback: (code: number | null) => void) {
+      closeCallbacks.push(callback);
     }
   };
 }
