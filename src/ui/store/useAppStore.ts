@@ -483,7 +483,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         const { sessionId, status, title, cwd } = event.payload;
         set((state) => {
           const existing = state.sessions[sessionId] ?? createSession(sessionId);
-          const shouldResetFiles = status !== "running";
           return {
             sessions: {
               ...state.sessions,
@@ -494,7 +493,6 @@ export const useAppStore = create<AppState>((set, get) => ({
                 cwd: cwd ?? existing.cwd,
                 updatedAt: Date.now(),
                 hasRunner: status === "running" ? true : existing.hasRunner,
-                createdFiles: shouldResetFiles ? [] : existing.createdFiles
               }
             }
           };
