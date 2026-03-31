@@ -38,8 +38,17 @@ setBroadcast((event: ServerEvent) => {
   }
 });
 
-wss.on("connection", (ws) => {
+wss.on("connection", async (ws) => {
   clients.add(ws);
+
+  // Send agent list on connect
+  try {
+    await registry.checkAvailability();
+    const agents = registry.getAll().map(({ id, label, available }) => ({ id, label, available }));
+    const event: ServerEvent = { type: "agents.list", payload: { agents } };
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
+  } catch (e) { console.error("Failed to send agents.list:", e); }
+
   ws.on("message", (raw) => {
     try {
       const event = JSON.parse(raw.toString());

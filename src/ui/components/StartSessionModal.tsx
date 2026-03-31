@@ -1,8 +1,12 @@
+import { useState } from "react";
+import type { AgentInfo } from "../types";
+import { useAppStore } from "../store/useAppStore";
+
 interface StartSessionModalProps {
   prompt: string;
   pendingStart: boolean;
   onPromptChange: (value: string) => void;
-  onStart: () => void;
+  onStart: (agentId?: string) => void;
   onClose: () => void;
 }
 
@@ -14,6 +18,9 @@ export function StartSessionModal({
   onClose
 }: StartSessionModalProps) {
   const workspaceHint = "~/Documents/workspace-kiro-assistant";
+  const agents = useAppStore((s) => s.agents);
+  const defaultAgentId = useAppStore((s) => s.defaultAgentId);
+  const [selectedAgent, setSelectedAgent] = useState(defaultAgentId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/20 px-4 py-8 backdrop-blur-sm">
@@ -30,6 +37,36 @@ export function StartSessionModal({
           Each session runs inside its own isolated workspace under <code>{workspaceHint}</code>. Upload files to bring artifacts into scope.
         </p>
         <div className="mt-5 grid gap-4">
+          {agents.length > 1 && (
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium text-muted">Agent</span>
+              <div className="flex gap-1 rounded-xl border border-ink-900/10 bg-surface-secondary p-1">
+                {agents.map((agent: AgentInfo) => {
+                  const isSelected = selectedAgent === agent.id;
+                  const isDisabled = !agent.available;
+                  return (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      disabled={isDisabled}
+                      title={isDisabled ? `${agent.label} is not installed` : agent.label}
+                      className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                        isSelected
+                          ? "bg-accent text-white shadow-sm"
+                          : isDisabled
+                            ? "text-muted-light cursor-not-allowed opacity-50"
+                            : "text-muted hover:bg-surface-tertiary hover:text-ink-700"
+                      }`}
+                      onClick={() => !isDisabled && setSelectedAgent(agent.id)}
+                    >
+                      {agent.id === "claude-code" ? "✦ " : "🤖 "}{agent.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </label>
+          )}
+
           <label className="grid gap-1.5">
             <span className="text-xs font-medium text-muted">Prompt (optional)</span>
             <textarea
@@ -43,7 +80,7 @@ export function StartSessionModal({
           </label>
           <button
             className="flex flex-col items-center rounded-full bg-accent px-5 py-3 text-sm font-medium text-white shadow-soft hover:bg-accent-hover transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={onStart}
+            onClick={() => onStart(selectedAgent)}
             disabled={pendingStart}
           >
             {pendingStart ? (

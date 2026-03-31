@@ -6,9 +6,9 @@ import { PROMPT_SUBMIT_EVENT } from "../constants";
 const DEFAULT_ALLOWED_TOOLS = "Read,Edit,Bash,Skill";
 
 export type PromptActions = {
-  sendPrompt: (text: string) => Promise<void>;
+  sendPrompt: (text: string, agentId?: string) => Promise<void>;
   handleStop: () => void;
-  handleStartFromModal: () => void;
+  handleStartFromModal: (agentId?: string) => void;
   isRunning: boolean;
   isConnecting: boolean;
 };
@@ -70,7 +70,7 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void): Promp
   );
 
   const sendPrompt = useCallback(
-    async (text: string) => {
+    async (text: string, agentId?: string) => {
       const prompt = text.trim();
       if (!prompt) return;
 
@@ -99,7 +99,7 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void): Promp
         }
         sendEvent({
           type: "session.start",
-          payload: { title, prompt, allowedTools: DEFAULT_ALLOWED_TOOLS, interactive: cliInteractive }
+          payload: { title, prompt, allowedTools: DEFAULT_ALLOWED_TOOLS, interactive: cliInteractive, ...(agentId && { agentId }) }
         });
       } else {
         if (isRunning) {
@@ -121,13 +121,13 @@ export function usePromptActions(sendEvent: (event: ClientEvent) => void): Promp
     sendEvent({ type: "session.stop", payload: { sessionId: activeSessionId } });
   }, [activeSessionId, sendEvent]);
 
-  const handleStartFromModal = useCallback(() => {
+  const handleStartFromModal = useCallback((agentId?: string) => {
     const prompt = startPrompt.trim();
     if (!prompt) {
       setShowStartModal(false);
       return;
     }
-    sendPrompt(prompt);
+    sendPrompt(prompt, agentId);
     setStartPrompt("");
     setShowStartModal(false);
   }, [sendPrompt, setShowStartModal, setStartPrompt, startPrompt]);

@@ -52,11 +52,27 @@ export function handleClientEvent(event: ClientEvent) {
       return;
     }
 
+    // Resolve and validate the requested agent
+    const agentId = event.payload.agentId ?? registry.getDefault();
+    console.log(`[session] starting session with agent=${agentId}`);
+    let agent;
+    try {
+      agent = registry.get(agentId);
+    } catch {
+      emit({ type: "runner.error", payload: { message: `Unknown agent: "${agentId}". Available agents: ${registry.getAll().map(a => a.id).join(", ")}` } });
+      return;
+    }
+    if (!agent.available) {
+      emit({ type: "runner.error", payload: { message: `Agent "${agent.label}" is not available — binary "${agent.defaultBinary}" not found. Install it and try again.` } });
+      return;
+    }
+
     let cwd = normalizeWorkingDirectory(event.payload.cwd);
     if (!cwd) cwd = createWorkspaceDirectory();
     const session = sessions.createSession({
       cwd, title: event.payload.title, allowedTools: event.payload.allowedTools,
-      prompt: event.payload.prompt, interactive: Boolean(event.payload.interactive)
+      prompt: event.payload.prompt, interactive: Boolean(event.payload.interactive),
+      agentId
     });
 
     const modelId = resolveModelId();
@@ -65,6 +81,7 @@ export function handleClientEvent(event: ClientEvent) {
     const handle = manager.spawn({
       session: session as any,
       model: modelId,
+      agentId,
       onEvent: emit,
       onSessionUpdate: (u) => sessions.updateSession(session.id, u)
     });
@@ -97,6 +114,7 @@ export function handleClientEvent(event: ClientEvent) {
     const handle = manager.getOrSpawn({
       session: session as any,
       model: modelId,
+      agentId: session.agentId ?? "kiro",
       resumeSessionId: session.kiroConversationId || undefined,
       history: history?.messages ?? [],
       onEvent: emit,

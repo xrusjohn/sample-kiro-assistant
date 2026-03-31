@@ -33,8 +33,8 @@ const AGENT_DEFINITIONS: Omit<AgentDefinition, "available" | "resolvedBinary">[]
     id: "claude-code",
     label: "Claude Code",
     binaryEnvVar: "CLAUDE_BINARY",
-    defaultBinary: "claude",
-    defaultArgs: ["acp"],
+    defaultBinary: "claude-agent-acp",
+    defaultArgs: [],
   },
 ];
 
@@ -79,7 +79,12 @@ export class AgentRegistry {
 
   /** Check availability of all registered agents. Results are cached with a short TTL. */
   async checkAvailability(): Promise<void> {
-    await Promise.all(AGENT_DEFINITIONS.map((def) => this.probeOne(def)));
+    const results = await Promise.all(AGENT_DEFINITIONS.map((def) => this.probeOne(def)));
+    for (const def of AGENT_DEFINITIONS) {
+      const cached = this.cache.get(def.id);
+      const binary = resolveBinaryName(def);
+      console.log(`[agent-registry] ${def.id}: binary=${binary} available=${cached?.available ?? false}${cached?.resolvedBinary ? ` path=${cached.resolvedBinary}` : ""}`);
+    }
   }
 
   /** Return all agents with their current availability status. */

@@ -446,7 +446,15 @@ function App() {
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
           <div />
-          <span className="text-sm font-medium text-ink-700">{activeSession?.title || "Kiro Assistant"}</span>
+          <span className="text-sm font-medium text-ink-700">
+            {activeSession?.agentId === "claude-code" ? <span style={{color: "#e67e22"}}>✦</span> : "🤖"}{" "}
+            {activeSession?.title || "Kiro Assistant"}
+            {activeSession?.agentId && activeSession.agentId !== "kiro" && (
+              <span className="ml-2 text-xs font-normal text-purple-600">
+                Claude Code
+              </span>
+            )}
+          </span>
           {messages.length > 0 ? (
             <span style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties} className="flex gap-2">
               <button

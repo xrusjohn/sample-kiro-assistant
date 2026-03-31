@@ -246,6 +246,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             </div>
           </section>
 
+          <AgentDefaultSection />
+
           <section className="rounded-2xl border border-ink-900/10 bg-surface-secondary/70 p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -441,6 +443,38 @@ function ServerCard({
         </div>
       )}
     </div>
+  );
+}
+
+function AgentDefaultSection() {
+  const agents = useAppStore((s) => s.agents);
+  const defaultAgentId = useAppStore((s) => s.defaultAgentId);
+  const setDefaultAgent = useAppStore((s) => s.setDefaultAgent);
+
+  if (agents.length < 2) return null;
+
+  return (
+    <section className="rounded-2xl border border-ink-900/10 bg-surface-secondary/70 p-4">
+      <div>
+        <h3 className="text-sm font-semibold text-ink-900">Default Agent</h3>
+        <p className="mt-1 text-[11px] text-muted">
+          Pre-selected agent when starting new sessions.
+        </p>
+      </div>
+      <div className="mt-3">
+        <select
+          className="w-full rounded-xl border border-ink-200 bg-surface px-3 py-2 text-sm text-ink-900 focus:border-accent focus:outline-none"
+          value={defaultAgentId}
+          onChange={(e) => setDefaultAgent(e.target.value)}
+        >
+          {agents.map((agent) => (
+            <option key={agent.id} value={agent.id} disabled={!agent.available}>
+              {agent.label}{!agent.available ? " (not installed)" : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+    </section>
   );
 }
 

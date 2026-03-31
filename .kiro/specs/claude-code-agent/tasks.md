@@ -35,51 +35,51 @@
 
 ## Phase 3: Session Handler & Event Types
 
-- [ ] 3a. Update `src/electron/types.ts` (and `src/ui/types.ts` if separate)
+- [x] 3a. Update `src/electron/types.ts` (and `src/ui/types.ts` if separate)
   - Add `agentId?: string` to `SessionStartPayload`
   - Add `agents.list` server event type with `AgentInfo[]` payload
   - Add `agentId: string` to `SessionView` / `Session` client type
 
-- [ ] 3b. Update `src/server/session-handler.ts`
+- [x] 3b. Update `src/server/session-handler.ts`
   - `session.start`: read `agentId` from payload (default to `AgentRegistry.getDefault()`), store in DB
   - `session.continue` / lazy-respawn: read `agentId` from DB row, pass to `manager.getOrSpawn()`
   - Validate `agentId` against registry on `session.start`; emit `runner.error` if unknown or unavailable
 
-- [ ] 3c. Emit `agents.list` event to WebSocket clients on connection in `src/server/index.ts`
+- [x] 3c. Emit `agents.list` event to WebSocket clients on connection in `src/server/index.ts`
 
 ## Phase 4: UI Changes
 
-- [ ] 4a. Update `src/ui/store/useAppStore.ts`
+- [x] 4a. Update `src/ui/store/useAppStore.ts`
   - Add `agents: AgentInfo[]` and `defaultAgentId: string` to store state
   - Handle `agents.list` server event
   - Add `setDefaultAgent(id)` action with `localStorage` persistence
   - Read `defaultAgentId` from `localStorage` on init (fallback: `"kiro"`)
   - Persist `agentId` in `SessionView` from session list events
 
-- [ ] 4b. Update `src/ui/components/StartSessionModal.tsx`
+- [x] 4b. Update `src/ui/components/StartSessionModal.tsx`
   - Add segmented control / dropdown for agent selection
   - Initialize selection from `appStore.defaultAgentId`
   - Disable unavailable agents with tooltip
   - Include `agentId` in `session.start` payload
 
-- [ ] 4c. Update `src/ui/components/Sidebar.tsx`
+- [x] 4c. Update `src/ui/components/Sidebar.tsx`
   - Add agent badge (e.g., "K" / "C") to each session list item
   - Derive badge from `session.agentId`
 
-- [ ] 4d. Update session detail header component
+- [x] 4d. Update session detail header component
   - Show agent name alongside session title
 
-- [ ] 4e. Update `src/ui/components/SettingsModal.tsx`
+- [x] 4e. Update `src/ui/components/SettingsModal.tsx`
   - Add "Default Agent" selector to the settings modal
   - Read from and write to `appStore.defaultAgentId` / `appStore.setDefaultAgent()`
   - Show unavailable agents as "(not installed)"
 
 ## Phase 5: Validation
 
-- [ ] 5a. Unit test: `AgentRegistry` availability check with mocked `execFile`
-- [ ] 5b. Unit test: `createAcpRunner` spawns correct binary when given each `AgentDefinition`
-- [ ] 5c. Unit test: `session.start` with `agentId: "claude-code"` stores and returns correct agent
-- [ ] 5d. Manual test: start a Kiro session and a Claude Code session concurrently — verify independent operation
-- [ ] 5e. Manual test: suspend a Claude Code session, resume it — verify `claude acp` is respawned (not `kiro-cli`)
-- [ ] 5f. Manual test: disable Claude Code binary, verify it shows as disabled in UI and produces a clear error if somehow invoked
-- [ ] 5g. Regression test: existing Kiro-only workflow unchanged end-to-end
+- [x] 5a. Unit test: `AgentRegistry` availability check with mocked `execFile`
+- [x] 5b. Unit test: `createAcpRunner` spawns correct binary when given each `AgentDefinition`
+- [x] 5c. Unit test: `session.start` with `agentId: "claude-code"` stores and returns correct agent
+- [x] 5d. Manual test: start a Kiro session and a Claude Code session concurrently — verify independent operation
+- [x] 5e. Manual test: suspend a Claude Code session, resume it — verify `claude acp` is respawned (not `kiro-cli`)
+- [x] 5f. Manual test: disable Claude Code binary, verify it shows as disabled in UI and produces a clear error if somehow invoked
+- [x] 5g. Regression test: existing Kiro-only workflow unchanged end-to-end

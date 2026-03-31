@@ -24,6 +24,12 @@ export type SkillInfo = import("../shared/skills").SkillInfo;
 
 export type SessionStatus = "idle" | "running" | "completed" | "error";
 
+export type AgentInfo = {
+  id: string;
+  label: string;
+  available: boolean;
+};
+
 export type SessionInfo = {
   id: string;
   title: string;
@@ -33,6 +39,7 @@ export type SessionInfo = {
   createdAt: number;
   updatedAt: number;
   hasRunner?: boolean;
+  agentId?: string;
 };
 
 // Server -> Client events
@@ -46,11 +53,12 @@ export type ServerEvent =
   | { type: "permission.request"; payload: { sessionId: string; toolUseId: string; toolName: string; input: unknown } }
   | { type: "runner.error"; payload: { sessionId?: string; message: string } }
   | { type: "session.metadata"; payload: { sessionId: string; contextUsagePercent?: number; creditsUsed?: number; turnDurationMs?: number } }
-  | { type: "debug.acp"; payload: { sessionId?: string; direction: "send" | "recv"; message: string; timestamp: number } };
+  | { type: "debug.acp"; payload: { sessionId?: string; direction: "send" | "recv"; message: string; timestamp: number } }
+  | { type: "agents.list"; payload: { agents: AgentInfo[] } };
 
 // Client -> Server events
 export type ClientEvent =
-  | { type: "session.start"; payload: { title: string; prompt: string; cwd?: string; allowedTools?: string; interactive?: boolean } }
+  | { type: "session.start"; payload: { title: string; prompt: string; cwd?: string; allowedTools?: string; interactive?: boolean; agentId?: string } }
   | { type: "session.continue"; payload: { sessionId: string; prompt: string; interactive?: boolean } }
   | { type: "session.stop"; payload: { sessionId: string } }
   | { type: "session.delete"; payload: { sessionId: string } }

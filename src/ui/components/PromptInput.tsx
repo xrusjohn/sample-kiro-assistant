@@ -127,7 +127,7 @@ export function PromptInput({ actions }: PromptInputProps) {
         {(modelLabel || sessionCwd) && (
           <div className="absolute -top-5 left-0 right-0 flex justify-center">
             <div className="flex items-center gap-2 text-[11px] text-muted font-mono">
-              {modelLabel && <span className="text-ink-500">Kiro · {modelLabel}</span>}
+              {modelLabel && <span className="text-ink-500">{activeSession?.agentId === "claude-code" ? <span style={{color: "#e67e22"}}>✦</span> : "🤖"} {activeSession?.agentId === "claude-code" ? "Claude Code" : "Kiro"} · {modelLabel}</span>}
               {contextPercent != null && <span title={`Context: ${contextPercent}%`}>{contextIcon(contextPercent)} {contextPercent}%</span>}
               {creditsUsed != null && <span title="Credits used this session">💰 {creditsUsed}</span>}
               {sessionCwd && <span className="text-ink-400">{formatCwd(sessionCwd)}</span>}

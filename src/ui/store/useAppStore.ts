@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ServerEvent, SessionStatus, StreamMessage, CreatedFile } from "../types";
+import type { ServerEvent, SessionStatus, StreamMessage, CreatedFile, AgentInfo } from "../types";
 
 export type CommandResult = {
   command: string;
@@ -30,6 +30,7 @@ export type SessionView = {
   contextUsagePercent?: number;
   creditsUsed?: number;
   hasRunner?: boolean;
+  agentId?: string;
 };
 
 export type AcpDebugEntry = {
@@ -65,6 +66,10 @@ interface AppState {
   fileSheetNames: string[] | undefined;
   fileLoading: boolean;
 
+  // Agent state
+  agents: AgentInfo[];
+  defaultAgentId: string;
+
   setPrompt: (prompt: string) => void;
   setCwd: (cwd: string) => void;
   setPendingStart: (pending: boolean) => void;
@@ -80,6 +85,9 @@ interface AppState {
   // Debug panel actions
   setDebugPanelOpen: (open: boolean) => void;
   clearAcpDebugLog: () => void;
+
+  // Agent actions
+  setDefaultAgent: (id: string) => void;
 
   // File sidebar actions
   setFileSidebarOpen: (open: boolean) => void;
@@ -314,6 +322,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   fileSheetNames: undefined,
   fileLoading: false,
 
+  // Agent state
+  agents: [],
+  defaultAgentId: localStorage.getItem("kiro-default-agent") || "kiro",
+
   setPrompt: (prompt) => set({ prompt }),
   setCwd: (cwd) => set({ cwd }),
   setPendingStart: (pendingStart) => set({ pendingStart }),
@@ -395,6 +407,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDebugPanelOpen: (debugPanelOpen) => set({ debugPanelOpen }),
   clearAcpDebugLog: () => set({ acpDebugLog: [] }),
 
+  // Agent actions
+  setDefaultAgent: (id) => {
+    localStorage.setItem("kiro-default-agent", id);
+    set({ defaultAgentId: id });
+  },
+
 
   handleServerEvent: (event) => {
     const state = get();
@@ -411,7 +429,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             cwd: session.cwd,
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,
-            hasRunner: session.hasRunner
+            hasRunner: session.hasRunner,
+            agentId: session.agentId
           };
         }
 
@@ -606,6 +625,11 @@ export const useAppStore = create<AppState>((set, get) => ({
             ...(creditsUsed != null && { creditsUsed: Math.round(((existing.creditsUsed ?? 0) + creditsUsed) * 1000) / 1000 }),
           } } };
         });
+        break;
+      }
+
+      case "agents.list": {
+        set({ agents: event.payload.agents });
         break;
       }
     }

@@ -19,9 +19,9 @@ const DEFAULT_CWD = process.cwd();
 
 // JSON-RPC helpers
 let rpcId = 0;
-function rpcRequest(method: string, params: Record<string, unknown> = {}) {
+function rpcRequest(tag: string, method: string, params: Record<string, unknown> = {}) {
   const msg = JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params }) + "\n";
-  console.log("[kiro-acp send]", msg.trim().slice(0, 200));
+  console.log(`[${tag} send]`, msg.trim().slice(0, 200));
   return { msg, id: rpcId };
 }
 
@@ -49,12 +49,17 @@ export function createAcpRunner(opts: {
   const { session, model, agent, resumeSessionId, onEvent, onSessionUpdate } = opts;
   const binary = agent.resolvedBinary;
   const normalizedCwd = normalizeWorkingDirectory(session.cwd) ?? DEFAULT_CWD;
+  const tag = `acp:${agent.id}`;
+  const spawnedAt = Date.now();
 
   if (!binary) {
+    console.error(`[${tag}] binary not found for ${agent.label} (env: ${agent.binaryEnvVar}, default: ${agent.defaultBinary})`);
     onEvent({ type: "runner.error", payload: { sessionId: session.id, message: `${agent.label} binary not found — install ${agent.label} CLI and try again.` } });
     onEvent({ type: "session.status", payload: { sessionId: session.id, status: "error", title: session.title, cwd: session.cwd, error: `${agent.label} binary not found` } });
     return { abort() {}, sendPrompt() {}, ready: Promise.reject(new Error("no binary")) };
   }
+
+  console.log(`[${tag}] spawning: ${binary} ${agent.defaultArgs.join(" ")} (session=${session.id}, cwd=${normalizedCwd})`);
 
   const child: ChildProcess = spawn(binary, agent.defaultArgs, {
     cwd: normalizedCwd,
@@ -62,11 +67,16 @@ export function createAcpRunner(opts: {
     env: { ...enhancedEnv, NO_COLOR: "1", CLICOLOR: "0", KIRO_CLI_DISABLE_PAGER: "1" }
   });
 
-  if (child.pid) addPid(child.pid, session.id);
+  if (child.pid) {
+    addPid(child.pid, session.id);
+    console.log(`[${tag}] pid=${child.pid} spawned in ${Date.now() - spawnedAt}ms`);
+  } else {
+    console.error(`[${tag}] spawn returned no pid — binary may have failed to start`);
+  }
 
   // Helper to write an RPC message and emit a debug event
   const writeRpc = (method: string, params: Record<string, unknown> = {}) => {
-    const { msg } = rpcRequest(method, params);
+    const { msg } = rpcRequest(tag, method, params);
     onEvent({ type: "debug.acp", payload: { sessionId: session.id, direction: "send", message: msg.trim(), timestamp: Date.now() } });
     child.stdin?.write(msg);
   };
@@ -187,7 +197,7 @@ export function createAcpRunner(opts: {
 
     // session/new failed
     if (msg.error && !acpSessionId) {
-      console.warn("[kiro-acp] session/new failed:", msg.error.message ?? msg.error);
+      console.warn(`[${tag}] session/new failed:`, msg.error.message ?? msg.error);
       const params: Record<string, unknown> = { cwd: normalizedCwd, mcpServers: [] };
       if (model) params.model = model;
       writeRpc("session/new", params);
@@ -208,7 +218,7 @@ export function createAcpRunner(opts: {
       }
 
       if (kind === "tool_call") {
-        console.log("[kiro-acp tool_call]", JSON.stringify(update).slice(0, 300));
+        console.log(`[${tag} tool_call]`, JSON.stringify(update).slice(0, 300));
         const title = update.title ?? "";
         const toolName = title.replace(/^Running:\s*/, "") || (update.toolName ?? update.name ?? "unknown");
         toolsUsedThisTurn.add(toolName.toLowerCase());
@@ -224,7 +234,7 @@ export function createAcpRunner(opts: {
       if (kind === "turn_end") { finishTurn(); return; }
 
       // Log any unhandled update types
-      console.log("[kiro-acp update]", kind, JSON.stringify(update).slice(0, 300));
+      console.log(`[${tag} update]`, kind, JSON.stringify(update).slice(0, 300));
     }
 
     // Response to session/prompt (stopReason)
@@ -265,19 +275,26 @@ export function createAcpRunner(opts: {
   child.stderr?.on("data", (d) => {
     const t = d.toString().trim();
     if (t) {
-      console.warn("[kiro-acp]", t);
+      console.warn(`[${tag} stderr]`, t);
       onEvent({ type: "debug.acp", payload: { sessionId: session.id, direction: "recv", message: `[stderr] ${t}`, timestamp: Date.now() } });
     }
   });
 
   child.on("error", (error) => {
+    console.error(`[${tag}] spawn error: ${error.message} (session=${session.id}, binary=${binary})`);
     onEvent({ type: "runner.error", payload: { sessionId: session.id, message: error.message } });
   });
 
-  child.on("close", (code) => {
+  child.on("close", (code, signal) => {
+    const uptime = Date.now() - spawnedAt;
     if (child.pid) removePid(child.pid);
-    if (!aborted && code !== 0) {
+    if (aborted) {
+      console.log(`[${tag}] pid=${child.pid} aborted after ${uptime}ms`);
+    } else if (code !== 0) {
+      console.error(`[${tag}] pid=${child.pid} exited code=${code} signal=${signal ?? "none"} after ${uptime}ms`);
       onEvent({ type: "session.status", payload: { sessionId: session.id, status: "error", title: session.title, cwd: session.cwd, error: `${agent.label} exited with code ${code}` } });
+    } else {
+      console.log(`[${tag}] pid=${child.pid} exited cleanly after ${uptime}ms`);
     }
   });
 

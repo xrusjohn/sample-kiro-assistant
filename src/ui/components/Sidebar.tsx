@@ -143,6 +143,7 @@ export function Sidebar({
                         "bg-slate-400";
                       return <span className={`inline-block w-2 h-2 rounded-full mr-1.5 align-middle ${dotClass}`} />;
                     })()}
+                    <span className="mr-1">{session.agentId === "claude-code" ? <span style={{color: "#e67e22"}}>✦</span> : "🤖"}</span>
                     {session.title}
                   </div>
                 )}
