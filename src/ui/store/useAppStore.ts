@@ -227,9 +227,9 @@ function extractFilesFromMessage(msg: StreamMessage, sessionId: string, cwd?: st
     }
 
     const msgStr = JSON.stringify(msg);
-    // Match file paths: binary extensions can be bare filenames, text extensions (.md) require a path prefix
-    const binaryFileRegex = /(?:^|["\s'`(])([/~.]?[\w /&.,-]*\.(xlsx|xls|xlsm|xlsb|csv|pdf|docx|doc|pptx|ppt|png|jpg|jpeg|gif|svg|zip|tar|gz))(?:["\s'`),]|$)/gi;
-    const textFileRegex = /(?:^|["\s'`(])([/~.][\w /&.,-]+\.(md|markdown))(?:["\s'`),]|$)/gi;
+    // Match file paths that contain at least one / (filters out bare fragments)
+    const allExts = "xlsx|xls|xlsm|xlsb|csv|pdf|docx|doc|pptx|ppt|png|jpg|jpeg|gif|svg|zip|tar|gz|md|markdown";
+    const filePathRegex = new RegExp(`(?:^|[\"\\s'\`(])([/~.]?[\\w /&.,-]*\\/[\\w /&.,-]*\\.(${allExts}))(?:[\"\\s'\`),]|$)`, "gi");
     let regexKind: CreatedFile["kind"] = msg.type === "assistant" ? "created" : "accessed";
     if (msg.type === "user" && Array.isArray(msg.message.content)) {
       const resultContent = msg.message.content.find(
@@ -243,20 +243,18 @@ function extractFilesFromMessage(msg: StreamMessage, sessionId: string, cwd?: st
         regexKind = "accessed";
       }
     }
-    for (const regex of [binaryFileRegex, textFileRegex]) {
-      let binaryMatch;
-      while ((binaryMatch = regex.exec(msgStr)) !== null) {
-        const rawPath = binaryMatch[1];
-        const filePath = rawPath.replace(/\\"/g, "").replace(/\\\//g, "/");
-        // Skip URLs, package paths, and very short matches
-        if (filePath.includes('://') ||
-            filePath.includes('node_modules') ||
-            filePath.includes('site-packages') ||
-            filePath.length < 3) {
-          continue;
-        }
-        addFile(filePath, regexKind, "regex");
+    let binaryMatch;
+    while ((binaryMatch = filePathRegex.exec(msgStr)) !== null) {
+      const rawPath = binaryMatch[1];
+      const filePath = rawPath.replace(/\\"/g, "").replace(/\\\//g, "/");
+      // Skip URLs, package paths, and very short matches
+      if (filePath.includes('://') ||
+          filePath.includes('node_modules') ||
+          filePath.includes('site-packages') ||
+          filePath.length < 3) {
+        continue;
       }
+      addFile(filePath, regexKind, "regex");
     }
   } catch (e) {
     console.error('Error extracting files from message:', e);
