@@ -364,7 +364,8 @@ export function FileSidebar({
           <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-surface">
               <span className="text-4xl">
-                {file.extension === "pdf" ? "📄" :
+                {content === '__not_found__' ? "🚫" :
+                 file.extension === "pdf" ? "📄" :
                  file.extension === "doc" || file.extension === "docx" ? "📝" :
                  file.extension === "xls" || file.extension === "xlsx" ? "📊" :
                  file.extension === "ppt" || file.extension === "pptx" ? "📽️" :
@@ -372,17 +373,23 @@ export function FileSidebar({
               </span>
             </div>
             <div>
-              <h3 className="text-lg font-medium text-ink-800">{getFileTypeName(file.extension)}</h3>
+              <h3 className="text-lg font-medium text-ink-800">
+                {content === '__not_found__' ? "File Not Found" : getFileTypeName(file.extension)}
+              </h3>
               <p className="text-sm text-muted mt-1">
-                This file type cannot be previewed inline.
+                {content === '__not_found__'
+                  ? "This file was mentioned but doesn't exist on disk. The agent may not have created it yet."
+                  : "This file type cannot be previewed inline."}
               </p>
             </div>
-            <button
-              className="mt-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
-              onClick={() => onOpenExternal(file)}
-            >
-              Open with Default App
-            </button>
+            {content !== '__not_found__' && (
+              <button
+                className="mt-2 rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
+                onClick={() => onOpenExternal(file)}
+              >
+                Open with Default App
+              </button>
+            )}
           </div>
         )}
       </div>

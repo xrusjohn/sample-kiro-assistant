@@ -278,6 +278,13 @@ function App() {
     setFileSheetNames(undefined);
 
     try {
+      const exists = await window.electron.fileExists(file.path);
+      if (!exists) {
+        setFileType('unknown');
+        setFileContent('__not_found__');
+        setFileLoading(false);
+        return;
+      }
       const result = await window.electron.readFile(file.path);
       if (result.success) {
         setFileContent(result.content || null);
