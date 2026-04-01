@@ -62,6 +62,33 @@ case "${1:-start}" in
     fi
     ;;
 
+  check)
+    # Full health check: tmux session + HTTP response
+    OK=true
+    if tmux has-session -t "$SESSION" 2>/dev/null; then
+      echo "✓ tmux session '$SESSION' exists"
+    else
+      echo "✗ tmux session '$SESSION' not found"
+      OK=false
+    fi
+
+    HEALTH=$(curl -sf --max-time 5 "http://localhost:$PORT/healthz" 2>&1) && {
+      echo "✓ /healthz responded: $HEALTH"
+    } || {
+      echo "✗ /healthz unreachable on port $PORT"
+      OK=false
+    }
+
+    if [ "$OK" = true ]; then
+      echo ""
+      echo "All checks passed ✓"
+    else
+      echo ""
+      echo "Some checks failed ✗"
+      exit 1
+    fi
+    ;;
+
   logs)
     if tmux has-session -t "$SESSION" 2>/dev/null; then
       tmux capture-pane -t "$SESSION" -p -S -100
@@ -71,7 +98,7 @@ case "${1:-start}" in
     ;;
 
   *)
-    echo "Usage: $0 {start|stop|restart|status|logs}"
+    echo "Usage: $0 {start|stop|restart|status|check|logs}"
     exit 1
     ;;
 esac

@@ -111,11 +111,11 @@ export function Sidebar({
     setUnsticking(sessionId);
     try {
       await fetch(`/api/sessions/${sessionId}/restart`, { method: "POST" });
-      // Update local state to idle so the UI reflects immediately
+      // Server respawns immediately — mark running so UI shows reconnecting state
       useAppStore.setState((state) => {
         const s = state.sessions[sessionId];
         if (!s) return {};
-        return { sessions: { ...state.sessions, [sessionId]: { ...s, status: "idle" as const, hasRunner: false, lastActivityAt: Date.now() } } };
+        return { sessions: { ...state.sessions, [sessionId]: { ...s, status: "running" as const, lastActivityAt: Date.now() } } };
       });
     } catch { /* ignore */ }
     setUnsticking(null);
@@ -287,6 +287,12 @@ export function Sidebar({
                     <DropdownMenu.Item
                       className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-surface-tertiary"
                       onSelect={async () => {
+                        // Optimistically show running state while ACP respawns
+                        useAppStore.setState((state) => {
+                          const s = state.sessions[session.id];
+                          if (!s) return {};
+                          return { sessions: { ...state.sessions, [session.id]: { ...s, status: "running" as const } } };
+                        });
                         await fetch(`/api/sessions/${session.id}/restart`, { method: "POST" });
                         setActiveSessionId(session.id);
                       }}

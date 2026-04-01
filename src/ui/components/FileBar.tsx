@@ -1,5 +1,8 @@
 import { useMemo } from "react";
+import * as ContextMenu from "@radix-ui/react-context-menu";
 import type { CreatedFile } from "../types";
+import { useSendToStore } from "../store/useSendToStore";
+import { isTextFile } from "../../shared/send-to-types";
 
 interface FileBarProps {
   createdFiles: CreatedFile[];
@@ -91,32 +94,77 @@ function FileChip({
 }) {
   const { icon, color } = getFileIcon(file.extension);
   const canPreview = isPreviewable(file.extension);
+  const destinations = useSendToStore((s) => s.destinations);
+  const openMenu = useSendToStore((s) => s.openMenu);
+  const selectDestination = useSendToStore((s) => s.selectDestination);
+  const fileIsText = isTextFile(file.extension);
+
   return (
-    <div
-      key={file.path}
-      className="group relative flex items-center gap-1.5 rounded-lg border border-ink-900/10 bg-surface-secondary px-2.5 py-1.5 hover:border-accent/30 hover:bg-accent-subtle transition-colors cursor-pointer"
-      onClick={() => canPreview ? onFileClick(file) : onOpenExternal(file)}
-      title={canPreview ? file.path : `${file.path} (click to open in default app)`}
-    >
-      <span className={`text-base ${color}`}>{icon}</span>
-      <span className="text-xs font-medium text-ink-700 max-w-[140px] truncate">
-        {file.name}
-      </span>
-      <button
-        className="ml-1 rounded p-0.5 text-ink-400 hover:text-ink-600 hover:bg-surface-tertiary opacity-0 group-hover:opacity-100 transition-opacity"
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpenExternal(file);
-        }}
-        title="Open in default app"
-      >
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-          <polyline points="15 3 21 3 21 9" />
-          <line x1="10" y1="14" x2="21" y2="3" />
-        </svg>
-      </button>
-    </div>
+    <ContextMenu.Root>
+      <ContextMenu.Trigger asChild>
+        <div
+          key={file.path}
+          className="group relative flex items-center gap-1.5 rounded-lg border border-ink-900/10 bg-surface-secondary px-2.5 py-1.5 hover:border-accent/30 hover:bg-accent-subtle transition-colors cursor-pointer"
+          onClick={() => canPreview ? onFileClick(file) : onOpenExternal(file)}
+          title={canPreview ? file.path : `${file.path} (click to open in default app)`}
+        >
+          <span className={`text-base ${color}`}>{icon}</span>
+          <span className="text-xs font-medium text-ink-700 max-w-[140px] truncate">
+            {file.name}
+          </span>
+          <button
+            className="ml-1 rounded p-0.5 text-ink-400 hover:text-ink-600 hover:bg-surface-tertiary opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenExternal(file);
+            }}
+            title="Open in default app"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </button>
+        </div>
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content className="z-50 min-w-[180px] rounded-xl border border-ink-900/10 bg-surface-secondary p-1 shadow-lg">
+          <ContextMenu.Item className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-surface-tertiary" onSelect={() => onFileClick(file)}>
+            📄 Open
+          </ContextMenu.Item>
+          <ContextMenu.Item className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-surface-tertiary" onSelect={() => window.open(`/api/files/preview?path=${encodeURIComponent(file.path)}`, "_blank")}>
+            👁 Preview
+          </ContextMenu.Item>
+          <ContextMenu.Item className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-surface-tertiary" onSelect={() => window.open(`/api/files/download?path=${encodeURIComponent(file.path)}`, "_blank")}>
+            ⬇ Download
+          </ContextMenu.Item>
+          <ContextMenu.Separator className="my-1 h-px bg-ink-900/10" />
+          <ContextMenu.Sub>
+            <ContextMenu.SubTrigger className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-surface-tertiary">
+              📤 Send To <span className="text-muted">▸</span>
+            </ContextMenu.SubTrigger>
+            <ContextMenu.Portal>
+              <ContextMenu.SubContent className="z-50 min-w-[180px] rounded-xl border border-ink-900/10 bg-surface-secondary p-1 shadow-lg">
+                {destinations.map((dest) => {
+                  const supported = dest.supportedFileTypes === "all" || (dest.supportedFileTypes === "text" && fileIsText);
+                  return (
+                    <ContextMenu.Item
+                      key={dest.id}
+                      disabled={!supported}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-700 outline-none hover:bg-surface-tertiary disabled:opacity-40"
+                      onSelect={() => { openMenu(file); selectDestination(dest.id); }}
+                    >
+                      {dest.icon} {dest.label}
+                    </ContextMenu.Item>
+                  );
+                })}
+              </ContextMenu.SubContent>
+            </ContextMenu.Portal>
+          </ContextMenu.Sub>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
   );
 }
 

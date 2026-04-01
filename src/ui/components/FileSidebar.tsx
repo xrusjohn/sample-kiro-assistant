@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CreatedFile } from "../types";
 import MDContent from "../render/markdown";
+import { SendToMenu } from "./SendToMenu";
+import { SendToConfigPanel } from "./SendToConfigPanel";
+import { SendToStatusIndicator } from "./SendToStatusIndicator";
 
 type FileType = 'text' | 'image' | 'pdf' | 'excel' | 'ppt' | 'binary' | 'unknown';
 type ExcelSheetRow = unknown[];
@@ -268,6 +271,7 @@ export function FileSidebar({
   const isMarkdown = file.extension === "md" || file.extension === "markdown";
 
   return (
+    <>
     <div
       ref={sidebarRef}
       className="fixed inset-y-0 right-0 flex flex-col bg-surface border-l border-ink-900/10 shadow-xl z-40"
@@ -316,6 +320,7 @@ export function FileSidebar({
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
           </button>
+          <SendToMenu file={file} content={content} />
           <button
             className="rounded-lg p-2 text-ink-500 hover:bg-ink-900/10 hover:text-ink-700 transition-colors"
             onClick={onClose}
@@ -327,6 +332,9 @@ export function FileSidebar({
           </button>
         </div>
       </div>
+
+      {/* Send To Status */}
+      <SendToStatusIndicator />
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
@@ -412,5 +420,7 @@ export function FileSidebar({
         )}
       </div>
     </div>
+    <SendToConfigPanel />
+    </>
   );
 }

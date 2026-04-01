@@ -8,7 +8,8 @@ import { extname, join, basename, resolve, normalize } from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 
-import { handleClientEvent, sessions, setBroadcast, abortAll, manager, registry } from "./session-handler.js";
+import { handleClientEvent, sessions, setBroadcast, abortAll, manager, registry, restartSession } from "./session-handler.js";
+import { createSendToRegistry, createSendToRouter, setSessionHandlerRef } from "./send-to/index.js";
 import { generateSessionTitle, normalizeWorkingDirectory, enhancedEnv } from "./util.js";
 import { loadAssistantSettings, saveAssistantSettings } from "./app-settings.js";
 import { SETTINGS_PATH } from "./paths.js";
@@ -27,6 +28,12 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 const upload = multer({ dest: "/tmp/kiro-uploads" });
+
+// Health check — registered early so it's not caught by the static/catch-all handler
+const SERVER_BOOT_TIME = Date.now();
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ status: "ok", uptime: Date.now() - SERVER_BOOT_TIME, pid: process.pid });
+});
 
 // --- WebSocket: event stream ---
 const clients = new Set<WebSocket>();
@@ -195,17 +202,14 @@ app.get("/api/sessions/health", (_req, res) => {
   res.json(manager.getHealth());
 });
 
-// Restart a session's ACP process (picks up new MCP config)
+// Restart a session's ACP process (picks up new MCP config, skills, etc.)
 app.post("/api/sessions/:id/restart", (_req, res) => {
   const id = _req.params.id;
-  const entry = manager.get(id);
-  if (!entry) {
-    res.status(404).json({ error: "Session not found" });
-    return;
+  if (restartSession(id)) {
+    res.json({ ok: true, message: "Agent restarting — will reconnect automatically" });
+  } else {
+    res.status(404).json({ error: "Session not found or failed to respawn" });
   }
-  console.log(`[restart] Destroying ACP for session ${id}...`);
-  manager.destroy(id);
-  res.json({ ok: true, message: "Session destroyed — next message will spawn a fresh ACP process with updated config" });
 });
 
 // Restart all sessions
@@ -461,6 +465,11 @@ app.get("/api/skills", async (_req, res) => {
   }
 });
 
+// --- Send To ---
+const sendToRegistry = createSendToRegistry();
+setSessionHandlerRef({ handleClientEvent, sessions });
+app.use("/api/files/send-to", createSendToRouter(sendToRegistry));
+
 app.get("/api/agents", async (_req, res) => {
   await registry.checkAvailability();
   const agents = registry.getAll().map(({ id, label, available }) => ({ id, label, available }));
@@ -468,8 +477,6 @@ app.get("/api/agents", async (_req, res) => {
 });
 
 // --- Server status & safe restart ---
-const SERVER_BOOT_TIME = Date.now();
-
 app.get("/api/server/status", (_req, res) => {
   const health = manager.getHealth();
   const uptimeMs = Date.now() - SERVER_BOOT_TIME;

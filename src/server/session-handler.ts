@@ -21,6 +21,34 @@ export function abortAll() { manager.abortAll(); }
 
 const resolveModelId = () => loadAssistantSettings().defaultModel?.trim() || DEFAULT_MODEL_ID;
 
+/** Hot-restart: kill old ACP process, immediately respawn with history. Returns true on success. */
+export function restartSession(sessionId: string): boolean {
+  const session = sessions.getSession(sessionId);
+  if (!session) return false;
+
+  console.log(`[restart] Hot-reloading ACP for session ${sessionId}...`);
+  manager.destroy(sessionId);
+
+  const modelId = resolveModelId();
+  const history = sessions.getSessionHistory(sessionId);
+
+  const handle = manager.spawn({
+    session: session as any,
+    model: modelId,
+    agentId: session.agentId ?? "kiro",
+    history: history?.messages ?? [],
+    onEvent: emit,
+    onSessionUpdate: (u) => sessions.updateSession(sessionId, u),
+  });
+
+  if (!handle) {
+    emit({ type: "session.status", payload: { sessionId, status: "error", title: session.title, cwd: session.cwd, error: "Failed to respawn ACP process" } });
+    return false;
+  }
+
+  return true;
+}
+
 function emit(event: ServerEvent) {
   if (event.type === "session.status") sessions.updateSession(event.payload.sessionId, { status: event.payload.status });
   if (event.type === "stream.message") sessions.recordMessage(event.payload.sessionId, event.payload.message);

@@ -7,11 +7,11 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
 ## Tasks
 
 - [ ] 1. Create shared types and server-side provider infrastructure
-  - [ ] 1.1 Create shared Send To types
+  - [x] 1.1 Create shared Send To types
     - Create `src/shared/send-to-types.ts` with `DestinationInfo`, `ConfigField`, `SendToRequest`, `SendToResponse`, `SendToStatus`, `TEXT_EXTENSIONS`, and `isTextFile()` as defined in the design
     - _Requirements: 2.2, 9.1_
 
-  - [ ] 1.2 Implement DestinationProvider interface and DestinationRegistry
+  - [x] 1.2 Implement DestinationProvider interface and DestinationRegistry
     - Create `src/server/send-to/destination-provider.ts` with the `DestinationProvider` interface
     - Create `src/server/send-to/destination-registry.ts` with the `DestinationRegistry` class (`register`, `get`, `getAll`, `has`, `getAvailableIds`)
     - _Requirements: 2.1, 2.2, 2.3_
@@ -28,21 +28,21 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
     - In `src/server/send-to/destination-registry.test.ts`, verify that text-only providers are disabled for non-text extensions and enabled for text extensions
 
 - [ ] 2. Implement destination providers
-  - [ ] 2.1 Implement EmailProvider
+  - [x] 2.1 Implement EmailProvider
     - Create `src/server/send-to/providers/email-provider.ts`
     - Config fields: `to` (email, required), `subject` (text, required), `body` (textarea, optional)
     - `supportedFileTypes: "all"`, invokes Outlook MCP `send_email` tool
     - Check MCP availability; return descriptive error if not configured
     - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-  - [ ] 2.2 Implement QuipProvider
+  - [x] 2.2 Implement QuipProvider
     - Create `src/server/send-to/providers/quip-provider.ts`
     - Config fields: `folderUrl` (text, required)
     - `supportedFileTypes: "all"`, invokes Quip MCP tool
     - Return clickable link on success; error with setup guidance if MCP not configured
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-  - [ ] 2.3 Implement S3Provider
+  - [x] 2.3 Implement S3Provider
     - Create `src/server/send-to/providers/s3-provider.ts`
     - Config fields: `bucket` (text, required), `keyPrefix` (text, optional)
     - Uses `@aws-sdk/client-s3` `PutObjectCommand`, returns `s3://bucket/key` URI on success
@@ -56,13 +56,13 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
     - Create `src/server/send-to/providers/s3-provider.test.ts`
     - Use fast-check to generate valid bucket names and keys, verify `data.uri` matches `s3://{bucket}/{key}`
 
-  - [ ] 2.5 Implement ClipboardProvider
+  - [x] 2.5 Implement ClipboardProvider
     - Create `src/server/send-to/providers/clipboard-provider.ts`
     - No config fields; server reads file as UTF-8 and returns content in `data.content`
     - `supportedFileTypes: "text"`
     - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-  - [ ] 2.6 Implement SessionProvider
+  - [x] 2.6 Implement SessionProvider
     - Create `src/server/send-to/providers/session-provider.ts`
     - Config fields: `sessionId` (select, required — populated from active sessions)
     - Sends `session.continue` event to target session with file path as context
@@ -76,7 +76,7 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
     - Create `src/server/send-to/providers/session-provider.test.ts`
     - Use fast-check to generate session lists and a current session ID, verify current session is excluded
 
-  - [ ] 2.8 Implement MemoryProvider
+  - [x] 2.8 Implement MemoryProvider
     - Create `src/server/send-to/providers/memory-provider.ts`
     - Config fields: `category` (select, optional), `content` (textarea, optional)
     - Creates memory entry via `IMemoryStore` with `sourceType: "send-to"`
@@ -89,14 +89,14 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
     - In `src/server/send-to/send-to-routes.test.ts`, use fast-check to generate params with missing required fields and verify `validateParams()` returns non-null error; generate complete params and verify null return
 
 - [ ] 3. Implement server route and registry wiring
-  - [ ] 3.1 Create Send To Express routes
+  - [x] 3.1 Create Send To Express routes
     - Create `src/server/send-to/send-to-routes.ts` with:
       - `POST /api/files/send-to` — validates file exists, looks up destination, validates params, calls `provider.send()`, returns `SendToResponse`
       - `GET /api/files/send-to/destinations` — returns `DestinationInfo[]` from registry
     - HTTP 404 for non-existent file, HTTP 400 for unknown destination (listing available IDs), HTTP 400 for invalid params
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-  - [ ] 3.2 Create registry initialization and mount routes in server
+  - [x] 3.2 Create registry initialization and mount routes in server
     - Create `src/server/send-to/index.ts` with `createSendToRegistry()` that registers all 6 providers
     - Mount the send-to router in `src/server/index.ts`
     - _Requirements: 2.1, 2.3, 9.1_
@@ -115,7 +115,7 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 5. Implement frontend store and UI components
-  - [ ] 5.1 Create useSendToStore Zustand store
+  - [x] 5.1 Create useSendToStore Zustand store
     - Create `src/ui/store/useSendToStore.ts` with state: `status`, `activeDestination`, `result`, `destinations`, `menuOpen`, `configPanelOpen`, `targetFile`
     - Actions: `fetchDestinations()`, `openMenu()`, `closeMenu()`, `selectDestination()`, `sendFile()`, `reset()`
     - Special handling for clipboard destination: intercept response and call `navigator.clipboard.writeText()`
@@ -127,7 +127,7 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
     - Create `src/ui/store/useSendToStore.test.ts`
     - Use fast-check to generate `SendToState` objects and verify disabled logic based on `status` and file validity
 
-  - [ ] 5.3 Create SendToMenu component
+  - [x] 5.3 Create SendToMenu component
     - Create `src/ui/components/SendToMenu.tsx`
     - Radix `DropdownMenu` listing destinations from `useSendToStore.destinations`
     - Show icon + label per destination; disable destinations whose `supportedFileTypes` don't match the current file
@@ -135,7 +135,7 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
     - Disable entire menu when file is `__not_found__`
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.4_
 
-  - [ ] 5.4 Create SendToConfigPanel component
+  - [x] 5.4 Create SendToConfigPanel component
     - Create `src/ui/components/SendToConfigPanel.tsx`
     - Dynamically render form inputs from `configFields`
     - For Session destination, fetch active sessions and populate select
@@ -143,7 +143,7 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
     - "Send" button triggers `useSendToStore.sendFile()`
     - _Requirements: 1.4, 3.1, 4.1, 5.1, 7.1, 7.3_
 
-  - [ ] 5.5 Create SendToStatusIndicator component
+  - [x] 5.5 Create SendToStatusIndicator component
     - Create `src/ui/components/SendToStatusIndicator.tsx`
     - `in_progress`: spinner + "Sending to {destination}..."
     - `success`: green checkmark + destination-specific details, auto-dismiss after 5 seconds
@@ -151,7 +151,7 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
     - _Requirements: 8.1, 8.2, 8.3_
 
 - [ ] 6. Integrate Send To into FileSidebar and FileBar
-  - [ ] 6.1 Add Send To button to FileSidebar header
+  - [x] 6.1 Add Send To button to FileSidebar header
     - Add a "Send To" button in the FileSidebar header action bar next to Preview and Download
     - Wire button click to open `SendToMenu`
     - Disable button when `content === '__not_found__'` with tooltip
@@ -159,7 +159,7 @@ Implement a pluggable "Send To" mechanism that lets users share files to externa
     - Render `SendToStatusIndicator` in the header area
     - _Requirements: 1.1, 1.2, 1.3, 8.1, 8.2, 8.3, 8.4_
 
-  - [ ] 6.2 Add context menu to FileBar file chips
+  - [x] 6.2 Add context menu to FileBar file chips
     - Add `onContextMenu` handler to `FileChip` in `FileBar.tsx`
     - Render Radix `ContextMenu` with "Open", "Preview", "Download", and "Send To ▸" submenu
     - "Send To" submenu lists destinations; selecting one opens `SendToConfigPanel` in a modal
