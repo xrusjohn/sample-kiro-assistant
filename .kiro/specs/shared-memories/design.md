@@ -427,3 +427,89 @@ npm install --save-dev fast-check
 ```
 
 Tests run via the existing vitest setup (`npm test` / `vitest run`). No additional configuration needed — `fast-check` integrates directly with vitest's `test` function.
+
+## Future: AgentCore Memory Backend
+
+### Why AgentCore Memory
+
+The current SQLite backend works well for local development on a thick Linux CDE, but the app is planned to move to ECS or AgentCore Runtime where local filesystem and SQLite won't be available. AWS Bedrock AgentCore Memory is a fully managed service that provides both short-term and long-term memory for AI agents, eliminating the need for self-managed database infrastructure.
+
+### AgentCore Memory Capabilities
+
+AgentCore Memory offers two memory types that map directly to our needs:
+
+| AgentCore Feature | Our Equivalent | Notes |
+|---|---|---|
+| **Short-term memory** — turn-by-turn within a session | Session message history (already in SQLite) | AgentCore handles this natively per session |
+| **Long-term memory** — extracted insights across sessions | Our `memories` table / `IMemoryStore` | This is the direct replacement |
+
+Long-term memory includes built-in extraction strategies:
+
+| AgentCore Strategy | Our Category Tag | What It Does |
+|---|---|---|
+| `UserPreferenceMemoryStrategy` | `preferences` | Auto-extracts user preferences, choices, styles |
+| `SemanticMemoryStrategy` | `project-context`, `decisions` | Extracts factual information and contextual knowledge |
+| `SessionSummaryStrategy` | `general` | Summarizes completed sessions for future reference |
+| `EpisodicMemoryStrategy` | `people`, `general` | Captures episodic events and interactions |
+
+### Migration Path
+
+**Phase 1 (current):** `SqliteMemoryStore` — local SQLite, works on CDE, no cloud dependencies.
+
+**Phase 2 (ECS migration):** `AgentCoreMemoryStore implements IMemoryStore` — uses AgentCore Memory API.
+
+The `IMemoryStore` interface we defined makes this swap clean:
+
+```typescript
+// Future implementation
+import { MemoryClient } from 'bedrock-agentcore/memory';
+
+export class AgentCoreMemoryStore implements IMemoryStore {
+  private client: MemoryClient;
+  private memoryId: string;
+
+  constructor(config: { region: string; memoryName: string }) {
+    this.client = new MemoryClient({ region: config.region });
+    // get_or_create_memory on init
+  }
+
+  async create(entry: CreateMemoryInput): Promise<MemoryEntry> {
+    // Maps to AgentCore Memory write API
+    // Category maps to namespace: /users/{userId}/{category}/
+  }
+
+  async getEnabled(): Promise<MemoryEntry[]> {
+    // Maps to AgentCore Memory retrieve API
+    // Replaces our manual injection with AgentCore's built-in context assembly
+  }
+
+  // ... other IMemoryStore methods
+}
+```
+
+### What AgentCore Gives Us for Free
+
+1. **Auto-extraction** — Built-in strategies replace our regex-based "remember that..." parsing. AgentCore uses LLM-based reflection to extract insights automatically from conversation history.
+2. **Semantic search** — Vector-based retrieval instead of our substring matching. More relevant memory recall.
+3. **Namespace isolation** — Memories scoped per user, per category, per agent. Maps to our category tags but with proper multi-tenant isolation.
+4. **Session summaries** — Automatic summarization of completed sessions. We'd get this without building it.
+5. **Managed infrastructure** — No SQLite file to back up, no schema migrations, scales automatically.
+
+### What We Still Need to Build
+
+Even with AgentCore Memory, the UI layer stays the same:
+- Memory Manager panel (view, search, toggle, delete)
+- Send To Memory destination
+- Context budget indicator
+- The `IMemoryStore` interface and API routes
+
+The server-side changes are limited to swapping the storage implementation. The `MEMORY_BACKEND=agentcore` env var triggers the switch.
+
+### Also Affects: Session Store
+
+When moving to ECS, the `SessionStore` (sessions + messages) also needs a cloud backend. Options:
+- **DSQL** (Aurora DSQL) — drop-in SQL replacement for SQLite, serverless, scales to zero
+- **AgentCore Runtime sessions** — built-in session isolation with persistent state
+- **DynamoDB** — if we want to go NoSQL
+
+This is a broader migration concern beyond just memories, but the pluggable interface pattern applies equally to `SessionStore`.
