@@ -1,4 +1,5 @@
 import { createAcpRunner, type RunnerHandle } from "./runner.js";
+import { createEcsRunner, getEcsRunnerInfo } from "./ecs-runner.js";
 import type { ServerEvent } from "../electron/types.js";
 import type { Session } from "../electron/libs/session-store.js";
 import { AgentRegistry } from "./agent-registry.js";
@@ -68,7 +69,9 @@ export class RunnerManager {
     const resolvedAgentId = opts.agentId ?? this.registry.getDefault();
     const agent = this.registry.get(resolvedAgentId);
 
-    const handle = createAcpRunner({ ...opts, agent });
+    const handle = process.env.ECS_RUNNER_ENABLED === 'true'
+      ? createEcsRunner({ session: opts.session, model: opts.model, agent, onEvent: opts.onEvent })
+      : createAcpRunner({ ...opts, agent });
     this.entries.set(opts.session.id, {
       handle,
       sessionId: opts.session.id,
@@ -149,14 +152,23 @@ export class RunnerManager {
   }
 
   getHealth() {
-    const sessions: { id: string; state: string; idleSeconds: number | null }[] = [];
+    const sessions: { id: string; state: string; idleSeconds: number | null; ecsTaskArn?: string; ecsTaskState?: string }[] = [];
     const now = Date.now();
+    const isEcsMode = process.env.ECS_RUNNER_ENABLED === "true";
     for (const [id, entry] of this.entries) {
-      sessions.push({
+      const item: typeof sessions[number] = {
         id,
         state: entry.state,
         idleSeconds: entry.state === "suspended" ? null : Math.round((now - entry.lastActivity) / 1000),
-      });
+      };
+      if (isEcsMode) {
+        const ecsInfo = getEcsRunnerInfo(id);
+        if (ecsInfo) {
+          item.ecsTaskArn = ecsInfo.taskArn ?? undefined;
+          item.ecsTaskState = ecsInfo.taskState;
+        }
+      }
+      sessions.push(item);
     }
     return { maxConcurrent: this.config.maxConcurrent, activeProcesses: this.activeCount, sessions };
   }

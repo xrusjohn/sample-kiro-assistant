@@ -90,7 +90,7 @@ export function handleClientEvent(event: ClientEvent) {
       emit({ type: "runner.error", payload: { message: `Unknown agent: "${agentId}". Available agents: ${registry.getAll().map(a => a.id).join(", ")}` } });
       return;
     }
-    if (!agent.available) {
+    if (!agent.available && process.env.ECS_RUNNER_ENABLED !== "true") {
       emit({ type: "runner.error", payload: { message: `Agent "${agent.label}" is not available — binary "${agent.defaultBinary}" not found. Install it and try again.` } });
       return;
     }

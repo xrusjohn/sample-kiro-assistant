@@ -1,0 +1,27 @@
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl unzip ca-certificates sqlite3 python3-pip nodejs socat \
+    && pip3 install --break-system-packages awscli --quiet \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -s /bin/bash kiro
+
+COPY --chown=kiro:kiro scripts/bootstrap-auth.sh /home/kiro/bootstrap-auth.sh
+COPY --chown=kiro:kiro scripts/acp-bridge.js /home/kiro/acp-bridge.js
+RUN chmod +x /home/kiro/bootstrap-auth.sh
+
+USER kiro
+WORKDIR /home/kiro
+
+RUN curl --proto '=https' --tlsv1.2 -sSf \
+    'https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip' \
+    -o kirocli.zip \
+    && unzip kirocli.zip \
+    && ./kirocli/install.sh --no-confirm \
+    && rm -rf kirocli kirocli.zip
+
+ENV PATH="/home/kiro/.local/bin:${PATH}"
+
+ENTRYPOINT ["/home/kiro/bootstrap-auth.sh"]
+CMD ["node", "/home/kiro/acp-bridge.js"]
