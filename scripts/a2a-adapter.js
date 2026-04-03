@@ -119,16 +119,17 @@ class AcpSession {
     });
   }
 
-  _sendPrompt({ text, resolve, reject }) {
+  _sendPrompt({ text, resolve, reject, onChunk }) {
     const chunks = [];
-    let promptDone = false;
 
     const handler = (method, params) => {
       if (method !== "session/update") return;
       const update = params?.update ?? params;
       const kind = update?.sessionUpdate ?? update?.kind;
       if (kind === "agent_message_chunk" && update.content?.text) {
-        chunks.push(update.content.text);
+        const t = update.content.text;
+        if (onChunk) onChunk(t);
+        else chunks.push(t);
       }
     };
     this._notifHandlers.push(handler);
@@ -137,8 +138,6 @@ class AcpSession {
       sessionId: this.acpSessionId,
       prompt: [{ type: "text", text }],
     }).then(() => {
-      promptDone = true;
-      // Drain: wait a tick for any in-flight notifications to be processed
       setTimeout(() => {
         this._notifHandlers = this._notifHandlers.filter(h => h !== handler);
         resolve(chunks.join(""));
@@ -153,9 +152,20 @@ class AcpSession {
     this.lastUsed = Date.now();
     return new Promise((resolve, reject) => {
       if (this.ready) {
-        this._sendPrompt({ text, resolve, reject });
+        this._sendPrompt({ text, resolve, reject, onChunk: null });
       } else {
-        this.queue.push({ text, resolve, reject });
+        this.queue.push({ text, resolve, reject, onChunk: null });
+      }
+    });
+  }
+
+  sendStreaming(text, onChunk) {
+    this.lastUsed = Date.now();
+    return new Promise((resolve, reject) => {
+      if (this.ready) {
+        this._sendPrompt({ text, resolve, reject, onChunk });
+      } else {
+        this.queue.push({ text, resolve, reject, onChunk });
       }
     });
   }
@@ -184,7 +194,7 @@ const AGENT_CARD = {
   version: "1.0.0",
   protocolVersion: "0.3.0",
   preferredTransport: "JSONRPC",
-  capabilities: { streaming: false },
+  capabilities: { streaming: true },
   defaultInputModes: ["text"],
   defaultOutputModes: ["text"],
   skills: [{
@@ -219,7 +229,8 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      if (rpcReq.method !== "message/send") {
+      const isStream = rpcReq.method === "message/stream";
+      if (rpcReq.method !== "message/send" && !isStream) {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ jsonrpc: "2.0", id: rpcReq.id, error: { code: -32601, message: "Method not found" } }));
         return;
@@ -239,23 +250,41 @@ const server = http.createServer(async (req, res) => {
         sessions.set(sessionId, new AcpSession(sessionId));
       }
 
-      try {
-        const responseText = await sessions.get(sessionId).send(text);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({
-          jsonrpc: "2.0",
-          id: rpcReq.id,
-          result: {
-            artifacts: [{
-              artifactId: randomUUID(),
-              name: "agent_response",
-              parts: [{ kind: "text", text: responseText }],
-            }],
-          },
-        }));
-      } catch (err) {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ jsonrpc: "2.0", id: rpcReq.id, error: { code: -32055, message: err.message } }));
+      const session = sessions.get(sessionId);
+
+      if (isStream) {
+        // SSE streaming response
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        });
+
+        const sendEvent = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+
+        try {
+          await session.sendStreaming(text, (chunk) => {
+            sendEvent("update", { type: "agent_message_chunk", content: { type: "text", text: chunk } });
+          });
+          sendEvent("update", { type: "turn_end" });
+          sendEvent("done", { stopReason: "end_turn" });
+        } catch (err) {
+          sendEvent("error", { message: err.message });
+        }
+        res.end();
+      } else {
+        // Buffered response
+        try {
+          const responseText = await session.send(text);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({
+            jsonrpc: "2.0", id: rpcReq.id,
+            result: { artifacts: [{ artifactId: randomUUID(), name: "agent_response", parts: [{ kind: "text", text: responseText }] }] },
+          }));
+        } catch (err) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ jsonrpc: "2.0", id: rpcReq.id, error: { code: -32055, message: err.message } }));
+        }
       }
     });
     return;
