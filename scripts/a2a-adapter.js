@@ -41,21 +41,18 @@ class AcpSession {
 
   _startBridge() {
     this._child = spawn(
-      "script",
-      ["-q", "-c", `stty -echo; NO_COLOR=1 TERM=dumb ${KIRO_BINARY} acp --agent kiro-assistant --trust-all-tools`, "/dev/null"],
+      KIRO_BINARY,
+      ["acp", "--agent", "kiro-assistant", "--trust-all-tools"],
       { stdio: ["pipe", "pipe", "pipe"] }
     );
-    this._sent = new Set(); // track sent JSON strings to filter echoes
 
     this._child.stdout.on("data", (data) => {
-      this._buf += data.toString().replace(/\r/g, "");
+      this._buf += data.toString();
       const lines = this._buf.split("\n");
       this._buf = lines.pop() ?? "";
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("{")) continue;
-        if (this._sent.has(trimmed)) { this._sent.delete(trimmed); continue; } // skip echo
-        try { this._handleMessage(JSON.parse(trimmed)); } catch {}
+        if (!line.trim().startsWith("{")) continue;
+        try { this._handleMessage(JSON.parse(line)); } catch {}
       }
     });
 
@@ -112,7 +109,6 @@ class AcpSession {
     const json = JSON.stringify({ jsonrpc: "2.0", id, method, params });
     return new Promise((resolve, reject) => {
       this._pending.set(id, { resolve, reject });
-      this._sent.add(json);
       this._child.stdin.write(json + "\n");
       setTimeout(() => {
         if (this._pending.has(id)) {
