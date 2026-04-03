@@ -2,12 +2,13 @@ import type { ServerEvent, ClientEvent } from "../electron/types.js";
 import { SessionStore } from "../electron/libs/session-store.js";
 import { RunnerManager } from "./runner-manager.js";
 import { AgentRegistry } from "./agent-registry.js";
-import { DB_PATH } from "./paths.js";
+import { DB_PATH, pullDbFromS3, pushDbToS3 } from "./paths.js";
 import { normalizeWorkingDirectory } from "./util.js";
 import { createWorkspaceDirectory } from "../electron/libs/workspace.js";
 import { loadAssistantSettings } from "./app-settings.js";
 import { DEFAULT_MODEL_ID } from "../shared/models.js";
 
+pullDbFromS3();
 export const sessions = new SessionStore(DB_PATH);
 export const registry = new AgentRegistry();
 export const manager = new RunnerManager(registry);
@@ -50,7 +51,10 @@ export function restartSession(sessionId: string): boolean {
 }
 
 function emit(event: ServerEvent) {
-  if (event.type === "session.status") sessions.updateSession(event.payload.sessionId, { status: event.payload.status });
+  if (event.type === "session.status") {
+    sessions.updateSession(event.payload.sessionId, { status: event.payload.status });
+    if (event.payload.status === "idle") pushDbToS3();
+  }
   if (event.type === "stream.message") sessions.recordMessage(event.payload.sessionId, event.payload.message);
   if (event.type === "stream.user_prompt") sessions.recordMessage(event.payload.sessionId, { type: "user_prompt", prompt: event.payload.prompt });
   broadcastFn(event);
