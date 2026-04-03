@@ -8,6 +8,8 @@ import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as logs from "aws-cdk-lib/aws-logs";
+import * as s3 from "aws-cdk-lib/aws-s3";
+import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 
 export interface KiroRemoteStackProps extends cdk.StackProps {
@@ -25,6 +27,12 @@ export interface KiroRemoteStackProps extends cdk.StackProps {
   domainName: string;
   /** Existing ECS cluster name to use (optional — creates new if not set) */
   clusterName?: string;
+  /** Secrets Manager ARN for kiro auth sqlite (injected as KIRO_AUTH_JSON via ECS native secrets) */
+  kiroAuthSecretArn: string;
+  /** S3 bucket name for orchestrator sessions.db checkpoint */
+  sessionsBucketName: string;
+  /** S3 key for sessions.db checkpoint (default: orchestrator/sessions.db) */
+  sessionsS3Key?: string;
 }
 
 export class KiroRemoteStack extends cdk.Stack {
@@ -140,6 +148,14 @@ export class KiroRemoteStack extends cdk.Stack {
       resources: ["*"],
     }));
 
+    // --- S3: sessions checkpoint bucket ---
+    const sessionsKey = props.sessionsS3Key ?? "orchestrator/sessions.db";
+    const sessionsBucket = s3.Bucket.fromBucketName(this, "SessionsBucket", props.sessionsBucketName);
+    sessionsBucket.grantReadWrite(orchTaskRole, sessionsKey);
+
+    // --- Secrets Manager: kiro auth ---
+    const kiroAuthSecret = secretsmanager.Secret.fromSecretCompleteArn(this, "KiroAuthSecret", props.kiroAuthSecretArn);
+
     // --- ECS Task Definitions ---
 
     // Get private subnet IDs as comma-separated string for env var
@@ -152,9 +168,15 @@ export class KiroRemoteStack extends cdk.Stack {
       memoryLimitMiB: 4096,
       taskRole: saTaskRole,
     });
+    // Execution role needs GetSecretValue for ECS native secrets injection
+    kiroAuthSecret.grantRead(saTaskDef.obtainExecutionRole());
     saTaskDef.addContainer("kiro-subagent", {
       image: ecs.ContainerImage.fromEcrRepository(repo, "latest"),
       portMappings: [{ containerPort: 8080 }],
+      environment: { AWS_REGION: cdk.Stack.of(this).region },
+      secrets: {
+        KIRO_AUTH_JSON: ecs.Secret.fromSecretsManager(kiroAuthSecret),
+      },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: "sa", logGroup: saLogs }),
     });
 
@@ -177,6 +199,7 @@ export class KiroRemoteStack extends cdk.Stack {
         ECS_SUBAGENT_SUBNETS: privateSubnetIds,
         ECS_SUBAGENT_SECURITY_GROUP: saSg.securityGroupId,
         ORIGIN_VERIFY_HEADER: originVerifySecret,
+        SESSIONS_S3_URI: `s3://${props.sessionsBucketName}/${sessionsKey}`,
       },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: "orch", logGroup: orchLogs }),
     });

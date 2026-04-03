@@ -21,6 +21,9 @@ new KiroRemoteStack(app, "KiroRemoteStack", {
   ],
   availabilityZones: ["us-east-1a", "us-east-1b"],
   certificateArn: "arn:aws:acm:us-east-1:441262788356:certificate/9612cb7f-9768-4c30-a2b9-7f6da4ee594e",
-  domainName: "kiro.xrusjohn.people.aws.dev",
+  domainName: "relay.xrusjohn.people.aws.dev",
   clusterName: "relay",
+  kiroAuthSecretArn: "arn:aws:secretsmanager:us-east-1:441262788356:secret:kiro/auth-sqlite-u9E7FN",
+  sessionsBucketName: "kiro-logs-441262788356",
+  sessionsS3Key: "orchestrator/sessions.db",
 });
