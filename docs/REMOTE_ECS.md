@@ -2,133 +2,139 @@
 
 ## Overview
 
-Run Kiro Assistant remotely on ECS, accessible from any machine via a thin CLI client or web browser. The orchestrator manages sessions and dispatches work to ephemeral kiro-cli sub-agent containers.
+Run Kiro Assistant remotely on ECS Fargate, accessible via browser or CLI at
+`https://relay.xrusjohn.people.aws.dev`. The orchestrator manages sessions and
+dispatches work to ephemeral kiro-cli sub-agent containers.
 
 ## Architecture
 
 ```
-┌─────────────────────┐
-│  Your Machine        │
-│  (Windows/Mac/Linux) │
-│                      │
-│  kiro-remote CLI     │
-│  or Web Browser      │
-└──────────┬──────────┘
-           │ HTTPS / WSS
-           ▼
-┌─────────────────────┐
-│  CloudFront          │
-│  kiro.xrusjohn.      │
-│  people.aws.dev      │
-│  (TLS termination,   │
-│   WebSocket support)  │
-└──────────┬──────────┘
-           │ HTTP (origin-restricted)
-           ▼
-┌─────────────────────┐     ┌─────────────────────┐
-│  ALB (internal)      │     │  AgentCore Identity  │
-│  (only accepts       │     │  Token Vault         │
-│   CloudFront traffic)│     └──────────┬──────────┘
-└──────────┬──────────┘                │
-           │ :3001                     │
-           ▼                           │
-┌─────────────────────┐                │
-│  Orchestrator        │                │
-│  (ECS Fargate svc)   │                │
-│  Express + WebSocket │                │
-│  + RunnerManager     │                │
-└──────────┬──────────┘                │
-           │ ECS RunTask               │
-           ▼                           │
-┌─────────────────────┐                │
-│  Sub-Agent           │◄───────────────┘
-│  (ECS Fargate task)  │  fetch auth at startup
-│  kiro-cli acp        │
-│  :8080 ACP/TCP       │
-└─────────────────────┘
+Browser / CLI client
+        │ HTTPS / WSS
+        ▼
+┌─────────────────────────────────────┐
+│  CloudFront                          │
+│  relay.xrusjohn.people.aws.dev       │
+│  cert: *.xrusjohn.people.aws.dev     │
+│  origin timeout: 60s                 │
+└──────────────────┬──────────────────┘
+                   │ HTTP :80 (CloudFront IPs only)
+                   ▼
+┌─────────────────────────────────────┐
+│  ALB  relay-alb                      │
+│  SG: CloudFront managed prefix list  │
+│  (no direct public access)           │
+└──────────────────┬──────────────────┘
+                   │ :3001
+                   ▼
+┌─────────────────────────────────────┐
+│  Orchestrator  (ECS Fargate service) │
+│  relay-orchestrator                  │
+│  Express + WebSocket                 │
+│  sessions.db ←→ S3 checkpoint        │
+└──────────────────┬──────────────────┘
+                   │ ECS RunTask (per session)
+                   ▼
+┌─────────────────────────────────────┐
+│  Sub-Agent  (ECS Fargate task)       │
+│  kiro-subagent                       │
+│  bootstrap-auth.sh → kiro-cli acp    │
+│  TCP bridge on :8080                 │
+└─────────────────────────────────────┘
 ```
 
 ## Security Model
 
-1. **CloudFront** terminates TLS using ACM cert `*.xrusjohn.people.aws.dev`
-2. **ALB** is restricted to CloudFront-only traffic via:
-   - AWS-managed CloudFront prefix list in security group
-   - Custom origin header (`X-Origin-Verify`) shared secret
-3. **Orchestrator** runs in private subnets, no public IP
-4. **Sub-Agents** run in private subnets, only reachable from orchestrator on port 8080
-5. **Auth** bootstrapped from AgentCore Identity Token Vault (primary) or Secrets Manager (fallback)
+- **CloudFront** terminates TLS with ACM cert `*.xrusjohn.people.aws.dev`
+- **ALB** security group only allows the CloudFront managed prefix list
+  (`com.amazonaws.global.cloudfront.origin-facing`) — no direct public access
+- **Sub-agents** only reachable from orchestrator on port 8080 (private subnet)
+- **Auth** injected via ECS native secrets injection from Secrets Manager
+  (`kiro/auth-sqlite`) — no credentials in environment variables or image
 
-## Components
+## Key Components
 
-| Component | Location | Description |
-|-----------|----------|-------------|
-| ACP TCP Transport | `src/server/acp-tcp.ts` | Newline-delimited JSON-RPC over TCP sockets |
-| ECS Runner | `src/server/ecs-runner.ts` | Launches ECS tasks, connects via ACP/TCP |
-| CLI Client | `src/cli-client/kiro-remote.ts` | Thin REPL client with reconnect |
-| Auth Bootstrap | `scripts/bootstrap-auth.sh` | Token Vault → Secrets Manager → S3 fallback |
-| Docker Image | `Dockerfile.kiro-cli` | kiro-cli + bootstrap script |
-| Infra Setup | `infra/setup.sh` | ECR, ECS, ALB, CloudFront, security groups, IAM |
+| File | Description |
+|------|-------------|
+| `Dockerfile.kiro-cli` | Sub-agent image: Ubuntu + kiro-cli + bridge |
+| `Dockerfile.server` | Orchestrator image: Node.js + server |
+| `scripts/acp-bridge.js` | TCP bridge: `script -q -c 'stty -echo; kiro-cli acp'` |
+| `scripts/bootstrap-auth.sh` | Writes `KIRO_AUTH_JSON` env var to sqlite on startup |
+| `src/server/acp-tcp.ts` | ACP over TCP transport (JSON-RPC, handles agent requests) |
+| `src/server/ecs-runner.ts` | Launches ECS tasks, runs ACP handshake, streams responses |
+| `src/server/paths.ts` | S3 pull/push for sessions.db persistence |
+
+## Why the PTY bridge?
+
+`kiro-cli acp` calls `isatty(stdin)` and exits silently if stdin is a plain
+pipe. The bridge uses `script -q -c '...' /dev/null` to give kiro-cli a PTY
+on stdin while keeping the bridge's own stdin/stdout as clean pipes for the
+TCP socket. `stty -echo` suppresses the PTY echoing input back as output.
+
+## Auth Flow
+
+1. `kiro-cli login` on your local machine (once per ~90 days)
+2. Push sqlite to Secrets Manager:
+   ```bash
+   python3 -c "
+   import sqlite3, json
+   db = sqlite3.connect('$HOME/.local/share/kiro-cli/data.sqlite3')
+   rows = [{'key': k, 'value': v} for k,v in db.execute('SELECT key, value FROM auth_kv')]
+   print(json.dumps(rows))
+   " | aws secretsmanager put-secret-value \
+     --secret-id kiro/auth-sqlite \
+     --region us-east-1 --profile workshop-new \
+     --secret-string file:///dev/stdin
+   ```
+3. ECS injects `KIRO_AUTH_JSON` at task startup (native secrets injection)
+4. Bootstrap writes rows to sqlite; kiro-cli auto-refreshes the access token
+   using the refresh token (valid ~90 days, needs outbound internet)
+
+See `docs/AUTH_FLOW.md` for full details.
+
+## Session Persistence
+
+The orchestrator stores session history in `~/.kiro-assistant/sessions.db`
+(SQLite). On each turn completion the DB is pushed to S3:
+
+```
+s3://kiro-logs-441262788356/orchestrator/sessions.db
+```
+
+On startup, if no local DB exists, it's pulled from S3. RPO ≈ one turn.
 
 ## Environment Variables
 
-### Orchestrator (ECS task)
+### Orchestrator
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ECS_RUNNER_ENABLED` | `false` | Set `true` to use ECS runner instead of local process |
-| `ECS_CLUSTER` | `relay` | ECS cluster name |
-| `ECS_SUBAGENT_TASK_FAMILY` | `kiro-subagent` | Sub-Agent task definition family |
-| `ECS_SUBAGENT_SUBNETS` | required | Comma-separated subnet IDs for sub-agent tasks |
-| `ECS_SUBAGENT_SECURITY_GROUP` | required | Security group for sub-agent tasks |
-| `ECS_SUBAGENT_CONTAINER_PORT` | `8080` | Port sub-agent listens on |
-| `ECS_SUBAGENT_STARTUP_TIMEOUT_MS` | `120000` | Max wait for task to reach RUNNING |
-| `KIRO_MAX_SESSIONS` | `5` | Max concurrent sessions |
-| `KIRO_IDLE_TIMEOUT_MINUTES` | `15` | Idle timeout before sub-agent shutdown |
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `ECS_RUNNER_ENABLED` | `true` | Use ECS runner |
+| `ECS_CLUSTER` | `relay` | ECS cluster |
+| `ECS_SUBAGENT_TASK_FAMILY` | `kiro-subagent:14` | Sub-agent task def |
+| `ECS_SUBAGENT_SUBNETS` | subnet IDs | Subnets for sub-agent tasks |
+| `ECS_SUBAGENT_SECURITY_GROUP` | sg ID | SG for sub-agent tasks |
+| `SESSIONS_S3_URI` | `s3://kiro-logs-441262788356/orchestrator/sessions.db` | S3 checkpoint |
+| `PORT` | `3001` | Server port |
 
-### Sub-Agent (ECS task)
+### Sub-Agent
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `KIRO_TOKEN_VAULT_ENDPOINT` | none | AgentCore Identity Token Vault URL |
-| `KIRO_AUTH_SECRET_ARN` | none | Secrets Manager ARN for auth fallback |
-| `KIRO_AUTH_S3_URI` | none | S3 URI for auth sqlite file |
-| `KIRO_SESSION_ID` | required | Session ID from orchestrator |
-| `KIRO_MODEL` | none | Model selection |
-| `KIRO_CWD` | `/workspace` | Working directory |
-| `MIDWAY_COOKIE` | none | Midway cookie for internal access (optional) |
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `KIRO_AUTH_JSON` | Secrets Manager (native injection) | Auth rows JSON array |
+| `AWS_REGION` | env | AWS region |
 
-## Deployment
+## Deployed Resources
 
-### Prerequisites
-
-- AWS CLI configured with appropriate permissions
-- Docker installed
-- VPC with public and private subnets
-
-### Quick Start
-
-```bash
-# Set required variables
-export VPC_ID=vpc-0eca3b0efc598dc16
-export SUBNET_IDS="subnet-0b7746dac5b0a0764,subnet-0ecfa05a0c9302f9e"
-export PRIVATE_SUBNET_IDS="subnet-0c023c99dd96bf3bb,subnet-06005c0716da0c590"
-export CERTIFICATE_ARN="arn:aws:acm:us-east-1:441262788356:certificate/9612cb7f-9768-4c30-a2b9-7f6da4ee594e"
-
-# Run infrastructure setup
-./infra/setup.sh
-
-# Build and push container image
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 441262788356.dkr.ecr.us-east-1.amazonaws.com
-docker build -t kiro-remote-ecr -f Dockerfile.kiro-cli .
-docker tag kiro-remote-ecr:latest 441262788356.dkr.ecr.us-east-1.amazonaws.com/kiro-remote-ecr:latest
-docker push 441262788356.dkr.ecr.us-east-1.amazonaws.com/kiro-remote-ecr:latest
-
-# Connect from your machine
-npx tsx src/cli-client/kiro-remote.ts --server https://kiro.xrusjohn.people.aws.dev
-```
-
-## Design Documents
-
-- Requirements: `.kiro/specs/remote-kiro-ecs/requirements.md`
-- Design: `.kiro/specs/remote-kiro-ecs/design.md`
-- Tasks: `.kiro/specs/remote-kiro-ecs/tasks.md`
+| Resource | ID / Name |
+|----------|-----------|
+| CloudFront distribution | `E24FG97RNBIWE6` |
+| CloudFront domain | `d2je3ke9qxkat0.cloudfront.net` |
+| Custom domain | `relay.xrusjohn.people.aws.dev` |
+| ALB | `relay-alb-699132099.us-east-1.elb.amazonaws.com` |
+| ECS cluster | `relay` |
+| Orchestrator service | `relay-orchestrator` |
+| ECR (subagent) | `441262788356.dkr.ecr.us-east-1.amazonaws.com/relay` |
+| ECR (orchestrator) | `441262788356.dkr.ecr.us-east-1.amazonaws.com/relay-server` |
+| Secrets Manager | `kiro/auth-sqlite` |
+| S3 checkpoint | `s3://kiro-logs-441262788356/orchestrator/sessions.db` |
