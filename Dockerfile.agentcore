@@ -1,0 +1,29 @@
+# Dockerfile.agentcore — AgentCore Runtime sub-agent image (ARM64)
+# Build via CDK CodeBuild (LinuxArmBuildImage) — do not build locally with buildx
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl unzip ca-certificates sqlite3 python3 nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -s /bin/bash kiro
+
+COPY --chown=kiro:kiro scripts/bootstrap-auth.sh /home/kiro/bootstrap-auth.sh
+COPY --chown=kiro:kiro scripts/a2a-adapter.js /home/kiro/a2a-adapter.js
+COPY --chown=kiro:kiro scripts/agentcore-entrypoint.sh /home/kiro/agentcore-entrypoint.sh
+RUN chmod +x /home/kiro/bootstrap-auth.sh /home/kiro/agentcore-entrypoint.sh
+
+USER kiro
+WORKDIR /home/kiro
+
+RUN curl --proto '=https' --tlsv1.2 -sSf \
+    'https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-aarch64-linux.zip' \
+    -o kirocli.zip \
+    && unzip kirocli.zip \
+    && ./kirocli/install.sh --no-confirm \
+    && rm -rf kirocli kirocli.zip
+
+ENV PATH="/home/kiro/.local/bin:${PATH}"
+
+EXPOSE 9000
+ENTRYPOINT ["/home/kiro/agentcore-entrypoint.sh"]

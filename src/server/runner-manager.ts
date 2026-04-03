@@ -1,5 +1,6 @@
 import { createAcpRunner, type RunnerHandle } from "./runner.js";
 import { createEcsRunner, getEcsRunnerInfo } from "./ecs-runner.js";
+import { createAgentCoreRunner, getAgentCoreRunnerInfo } from "./agentcore-runner.js";
 import type { ServerEvent } from "../electron/types.js";
 import type { Session } from "../electron/libs/session-store.js";
 import { AgentRegistry } from "./agent-registry.js";
@@ -69,9 +70,15 @@ export class RunnerManager {
     const resolvedAgentId = opts.agentId ?? this.registry.getDefault();
     const agent = this.registry.get(resolvedAgentId);
 
-    const handle = process.env.ECS_RUNNER_ENABLED === 'true'
-      ? createEcsRunner({ session: opts.session, model: opts.model, agent, onEvent: opts.onEvent })
-      : createAcpRunner({ ...opts, agent });
+    if (process.env.AGENTCORE_RUNNER_ENABLED === 'true' && process.env.ECS_RUNNER_ENABLED === 'true') {
+      console.warn('[runner-manager] Both AGENTCORE_RUNNER_ENABLED and ECS_RUNNER_ENABLED are set. Using AgentCore runner.');
+    }
+
+    const handle = process.env.AGENTCORE_RUNNER_ENABLED === 'true'
+      ? createAgentCoreRunner({ session: opts.session, model: opts.model, agent, onEvent: opts.onEvent, onSessionUpdate: opts.onSessionUpdate })
+      : process.env.ECS_RUNNER_ENABLED === 'true'
+        ? createEcsRunner({ session: opts.session, model: opts.model, agent, onEvent: opts.onEvent })
+        : createAcpRunner({ ...opts, agent });
     this.entries.set(opts.session.id, {
       handle,
       sessionId: opts.session.id,
@@ -152,9 +159,10 @@ export class RunnerManager {
   }
 
   getHealth() {
-    const sessions: { id: string; state: string; idleSeconds: number | null; ecsTaskArn?: string; ecsTaskState?: string }[] = [];
+    const sessions: { id: string; state: string; idleSeconds: number | null; ecsTaskArn?: string; ecsTaskState?: string; agentCoreRuntimeArn?: string; agentCoreContainerState?: string; agentCoreInvocationId?: string }[] = [];
     const now = Date.now();
     const isEcsMode = process.env.ECS_RUNNER_ENABLED === "true";
+    const isAgentCoreMode = process.env.AGENTCORE_RUNNER_ENABLED === "true";
     for (const [id, entry] of this.entries) {
       const item: typeof sessions[number] = {
         id,
@@ -166,6 +174,14 @@ export class RunnerManager {
         if (ecsInfo) {
           item.ecsTaskArn = ecsInfo.taskArn ?? undefined;
           item.ecsTaskState = ecsInfo.taskState;
+        }
+      }
+      if (isAgentCoreMode) {
+        const acInfo = getAgentCoreRunnerInfo(id);
+        if (acInfo) {
+          item.agentCoreRuntimeArn = acInfo.agentRuntimeArn;
+          item.agentCoreContainerState = acInfo.containerState;
+          item.agentCoreInvocationId = acInfo.invocationId ?? undefined;
         }
       }
       sessions.push(item);

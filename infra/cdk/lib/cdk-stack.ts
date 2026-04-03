@@ -9,8 +9,13 @@ import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as s3assets from "aws-cdk-lib/aws-s3-assets";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as codebuild from "aws-cdk-lib/aws-codebuild";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as cr from "aws-cdk-lib/custom-resources";
 import { Construct } from "constructs";
+import { join } from "path";
 
 export interface KiroRemoteStackProps extends cdk.StackProps {
   /** VPC ID to deploy into */
@@ -303,6 +308,163 @@ export class KiroRemoteStack extends cdk.Stack {
     new cdk.CfnOutput(this, "OriginVerifySecret", {
       value: originVerifySecret,
       description: "Shared secret for CloudFront → ALB origin verification",
+    });
+
+    // --- AgentCore Runtime: ECR + ARM64 CodeBuild + Runtime ---
+
+    const agentcoreRepo = new ecr.Repository(this, "AgentCoreRepo", {
+      repositoryName: "kiro-agentcore",
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    // Source asset: project root (Dockerfile.agentcore + scripts/)
+    const sourceAsset = new s3assets.Asset(this, "AgentCoreSource", {
+      path: join(__dirname, "..", "..", ".."), // repo root
+      exclude: ["node_modules", ".git", "dist*", "cdk.out", "infra/cdk/node_modules"],
+    });
+
+    const buildRole = new iam.Role(this, "AgentCoreBuildRole", {
+      assumedBy: new iam.ServicePrincipal("codebuild.amazonaws.com"),
+      inlinePolicies: {
+        build: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+              resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/codebuild/*`],
+            }),
+            new iam.PolicyStatement({
+              actions: ["ecr:GetAuthorizationToken"],
+              resources: ["*"],
+            }),
+            new iam.PolicyStatement({
+              actions: ["ecr:BatchCheckLayerAvailability", "ecr:PutImage", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload"],
+              resources: [agentcoreRepo.repositoryArn],
+            }),
+            new iam.PolicyStatement({
+              actions: ["s3:GetObject"],
+              resources: [`${sourceAsset.bucket.bucketArn}/*`],
+            }),
+          ],
+        }),
+      },
+    });
+
+    const buildProject = new codebuild.Project(this, "AgentCoreBuild", {
+      projectName: "kiro-agentcore-arm64",
+      role: buildRole,
+      environment: {
+        buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2_STANDARD_3_0,
+        computeType: codebuild.ComputeType.LARGE,
+        privileged: true,
+      },
+      source: codebuild.Source.s3({
+        bucket: sourceAsset.bucket,
+        path: sourceAsset.s3ObjectKey,
+      }),
+      buildSpec: codebuild.BuildSpec.fromObject({
+        version: "0.2",
+        phases: {
+          pre_build: { commands: [
+            "aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REPO_URI",
+          ]},
+          build: { commands: [
+            "docker build -f Dockerfile.agentcore -t $REPO_URI:latest .",
+          ]},
+          post_build: { commands: [
+            "docker push $REPO_URI:latest",
+            "echo $REPO_URI:latest > /tmp/image_uri.txt",
+          ]},
+        },
+        artifacts: { files: ["/tmp/image_uri.txt"] },
+      }),
+      environmentVariables: {
+        AWS_DEFAULT_REGION: { value: this.region },
+        REPO_URI: { value: agentcoreRepo.repositoryUri },
+      },
+    });
+
+    // Lambda to trigger build on deploy and wait for completion
+    const buildTriggerFn = new lambda.Function(this, "AgentCoreBuildTrigger", {
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: "index.handler",
+      timeout: cdk.Duration.minutes(20),
+      code: lambda.Code.fromInline(`
+import boto3, time, urllib3, json
+
+def send(event, context, status, data):
+    body = json.dumps({'Status': status, 'Reason': 'See CloudWatch', 'PhysicalResourceId': context.log_stream_name, 'StackId': event['StackId'], 'RequestId': event['RequestId'], 'LogicalResourceId': event['LogicalResourceId'], 'Data': data})
+    urllib3.PoolManager().request('PUT', event['ResponseURL'], headers={'content-type': '', 'content-length': str(len(body))}, body=body)
+
+def handler(event, context):
+    if event['RequestType'] == 'Delete':
+        send(event, context, 'SUCCESS', {}); return
+    cb = boto3.client('codebuild')
+    build_id = cb.start_build(projectName=event['ResourceProperties']['ProjectName'])['build']['id']
+    while True:
+        status = cb.batch_get_builds(ids=[build_id])['builds'][0]['buildStatus']
+        if status == 'SUCCEEDED':
+            send(event, context, 'SUCCESS', {'BuildId': build_id}); return
+        elif status in ['FAILED', 'FAULT', 'STOPPED', 'TIMED_OUT']:
+            send(event, context, 'FAILED', {'Error': status}); return
+        time.sleep(30)
+`),
+      initialPolicy: [
+        new iam.PolicyStatement({
+          actions: ["codebuild:StartBuild", "codebuild:BatchGetBuilds"],
+          resources: [buildProject.projectArn],
+        }),
+      ],
+    });
+
+    const triggerBuild = new cdk.CustomResource(this, "AgentCoreTriggerBuild", {
+      serviceToken: buildTriggerFn.functionArn,
+      properties: {
+        ProjectName: buildProject.projectName,
+        SourceHash: sourceAsset.assetHash,
+      },
+    });
+
+    // AgentCore Runtime role
+    const agentcoreRuntimeRole = new iam.Role(this, "AgentCoreRuntimeRole", {
+      assumedBy: new iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
+    });
+    agentcoreRepo.grantPull(agentcoreRuntimeRole);
+    kiroAuthSecret.grantRead(agentcoreRuntimeRole);
+    agentcoreRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogGroups", "logs:DescribeLogStreams"],
+      resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/bedrock-agentcore/runtimes/*`],
+    }));
+    agentcoreRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      resources: ["arn:aws:bedrock:*::foundation-model/*"],
+    }));
+
+    // AgentCore Runtime (L1 construct)
+    const agentcoreRuntime = new cdk.CfnResource(this, "AgentCoreRuntime", {
+      type: "AWS::Bedrock::AgentCoreRuntime",
+      properties: {
+        AgentRuntimeName: "kiro_assistant",
+        AgentRuntimeArtifact: {
+          ContainerConfiguration: { ContainerUri: `${agentcoreRepo.repositoryUri}:latest` },
+        },
+        NetworkConfiguration: { NetworkMode: "PUBLIC" },
+        RoleArn: agentcoreRuntimeRole.roleArn,
+        ProtocolConfiguration: { ServerProtocol: "A2A" },
+        LifecycleConfiguration: { IdleRuntimeSessionTimeout: 900 },
+        EnvironmentVariables: {
+          KIRO_AUTH_SECRET_ARN: props.kiroAuthSecretArn,
+          AWS_REGION: this.region,
+        },
+      },
+    });
+    agentcoreRuntime.node.addDependency(triggerBuild);
+
+    new cdk.CfnOutput(this, "AgentCoreRuntimeArn", {
+      value: agentcoreRuntime.getAtt("AgentRuntimeArn").toString(),
+      description: "Set AGENTCORE_AGENT_RUNTIME_ARN on the orchestrator to use AgentCore runner",
+    });
+    new cdk.CfnOutput(this, "AgentCoreEcrUri", {
+      value: agentcoreRepo.repositoryUri,
     });
   }
 }

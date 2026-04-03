@@ -1,7 +1,15 @@
+# syntax=docker/dockerfile:1
+# Build for ARM64 (AgentCore Runtime requirement):
+#   docker buildx build --platform linux/arm64 -f Dockerfile.kiro-cli -t <tag> .
+# Build for x86_64 (ECS Fargate):
+#   docker build -f Dockerfile.kiro-cli -t <tag> .
+
 FROM ubuntu:24.04
 
+ARG TARGETARCH
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl unzip ca-certificates sqlite3 python3-pip nodejs socat \
+    curl unzip ca-certificates sqlite3 python3-pip nodejs npm \
     && pip3 install --break-system-packages awscli --quiet \
     && rm -rf /var/lib/apt/lists/*
 
@@ -9,13 +17,17 @@ RUN useradd -m -s /bin/bash kiro
 
 COPY --chown=kiro:kiro scripts/bootstrap-auth.sh /home/kiro/bootstrap-auth.sh
 COPY --chown=kiro:kiro scripts/acp-bridge.js /home/kiro/acp-bridge.js
-RUN chmod +x /home/kiro/bootstrap-auth.sh
+COPY --chown=kiro:kiro scripts/a2a-adapter.js /home/kiro/a2a-adapter.js
+COPY --chown=kiro:kiro scripts/agentcore-entrypoint.sh /home/kiro/agentcore-entrypoint.sh
+RUN chmod +x /home/kiro/bootstrap-auth.sh /home/kiro/agentcore-entrypoint.sh
 
 USER kiro
 WORKDIR /home/kiro
 
-RUN curl --proto '=https' --tlsv1.2 -sSf \
-    'https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-x86_64-linux.zip' \
+# Install kiro-cli for the target architecture
+RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
+    curl --proto '=https' --tlsv1.2 -sSf \
+    "https://desktop-release.q.us-east-1.amazonaws.com/latest/kirocli-${ARCH}-linux.zip" \
     -o kirocli.zip \
     && unzip kirocli.zip \
     && ./kirocli/install.sh --no-confirm \
@@ -23,5 +35,10 @@ RUN curl --proto '=https' --tlsv1.2 -sSf \
 
 ENV PATH="/home/kiro/.local/bin:${PATH}"
 
+# Default: ECS mode (ACP bridge over TCP)
 ENTRYPOINT ["/home/kiro/bootstrap-auth.sh"]
 CMD ["node", "/home/kiro/acp-bridge.js"]
+
+# AgentCore mode: override entrypoint via Runtime config or docker run:
+#   --entrypoint /home/kiro/agentcore-entrypoint.sh
+# (starts a2a-adapter on port 9000 instead of acp-bridge on port 8080)
