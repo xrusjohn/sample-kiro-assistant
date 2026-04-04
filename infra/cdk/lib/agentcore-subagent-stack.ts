@@ -124,6 +124,8 @@ def handler(event, context):
       lifecycleConfiguration: { idleRuntimeSessionTimeout: cdk.Duration.minutes(15) },
       environmentVariables: {
         KIRO_AUTH_SECRET_ARN: kiroAuthSecretArn,
+        KIRO_CREDENTIAL_PROVIDER: "kiro-cli-creds",
+        KIRO_WORKLOAD_NAME: "kiro-subagent",
         AWS_REGION: this.region,
         IMAGE_VERSION: source.assetHash.slice(0, 8), // forces runtime update when image changes
       },
@@ -137,6 +139,10 @@ def handler(event, context):
     runtime.addToRolePolicy(new iam.PolicyStatement({
       actions: ["secretsmanager:GetSecretValue"],
       resources: [kiroAuthSecretArn],
+    }));
+    runtime.addToRolePolicy(new iam.PolicyStatement({
+      actions: ["bedrock-agentcore:GetWorkloadAccessToken", "bedrock-agentcore:GetResourceApiKey"],
+      resources: ["*"],
     }));
 
     this.agentRuntimeArn = runtime.agentRuntimeArn;
