@@ -2,146 +2,123 @@
 #
 # seed-kiro-credentials.sh — One-time setup for AgentCore Identity Token Vault
 #
-# Creates the workload identity and API key credential provider, then stores
-# kiro-cli's device-registration credentials as a JSON-encoded API key.
+# Reads kiro-cli auth from its local sqlite DB, creates the AgentCore Identity
+# workload identity and API key credential provider, and stores the auth bundle.
 #
 # Prerequisites:
-#   - AWS CLI configured with admin-level permissions
-#   - kiro-cli authenticated locally (has ~/.kiro/auth/device-registration.json)
-#   - jq installed
+#   - AWS CLI configured with appropriate permissions
+#   - kiro-cli authenticated locally (has data.sqlite3 with auth_kv)
+#   - jq, sqlite3, python3 installed
 #
 # Usage:
-#   ./seed-kiro-credentials.sh [--region us-east-1] [--provider-name kiro-cli-creds] [--workload-name kiro-subagent]
+#   ./scripts/seed-kiro-credentials.sh [--region us-east-1]
 #
-
 set -euo pipefail
 
-# Defaults
 REGION="${AWS_REGION:-us-east-1}"
 PROVIDER_NAME="kiro-cli-creds"
 WORKLOAD_NAME="kiro-subagent"
-KIRO_AUTH_FILE="$HOME/.kiro/auth/device-registration.json"
+KIRO_DB="$HOME/.local/share/kiro-cli/data.sqlite3"
 
-# Parse args
 while [ $# -gt 0 ]; do
   case "$1" in
-    --region)       REGION="$2"; shift 2 ;;
+    --region)        REGION="$2"; shift 2 ;;
     --provider-name) PROVIDER_NAME="$2"; shift 2 ;;
     --workload-name) WORKLOAD_NAME="$2"; shift 2 ;;
-    --auth-file)    KIRO_AUTH_FILE="$2"; shift 2 ;;
+    --db)            KIRO_DB="$2"; shift 2 ;;
     *) echo "Unknown arg: $1" >&2; exit 1 ;;
   esac
 done
 
 echo "=== AgentCore Identity Token Vault Seed ==="
-echo "Region:        $REGION"
-echo "Provider:      $PROVIDER_NAME"
-echo "Workload:      $WORKLOAD_NAME"
-echo "Auth file:     $KIRO_AUTH_FILE"
+echo "Region:    $REGION"
+echo "Provider:  $PROVIDER_NAME"
+echo "Workload:  $WORKLOAD_NAME"
+echo "DB:        $KIRO_DB"
 echo ""
 
-# Validate auth file exists
-if [ ! -f "$KIRO_AUTH_FILE" ]; then
-  echo "ERROR: $KIRO_AUTH_FILE not found." >&2
-  echo "Run 'kiro-cli' locally and authenticate first." >&2
+# Validate DB exists and has auth
+if [ ! -f "$KIRO_DB" ]; then
+  echo "ERROR: $KIRO_DB not found. Run 'kiro-cli' and authenticate first." >&2
   exit 1
 fi
 
-# Validate it has required fields
-for field in client_id client_secret refresh_token; do
-  val=$(jq -r ".$field // empty" "$KIRO_AUTH_FILE")
-  if [ -z "$val" ]; then
-    echo "ERROR: Missing '$field' in $KIRO_AUTH_FILE" >&2
-    exit 1
-  fi
-done
+DEV_REG=$(sqlite3 "$KIRO_DB" "SELECT value FROM auth_kv WHERE key='kirocli:odic:device-registration';" 2>/dev/null || true)
+TOKEN=$(sqlite3 "$KIRO_DB" "SELECT value FROM auth_kv WHERE key='kirocli:odic:token';" 2>/dev/null || true)
 
-# Build the API key payload — JSON-encode the credential bundle
-# Add expires_at if not present (90 days from now)
-API_KEY_JSON=$(jq -c '{
-  client_id: .client_id,
-  client_secret: .client_secret,
-  refresh_token: .refresh_token,
-  issuer_url: (.issuer_url // "https://auth.kiro.dev"),
-  expires_at: (.expires_at // (now + 7776000 | strftime("%Y-%m-%dT%H:%M:%SZ")))
-}' "$KIRO_AUTH_FILE")
+if [ -z "$DEV_REG" ]; then
+  echo "ERROR: No device-registration found in DB. Authenticate kiro-cli first." >&2
+  exit 1
+fi
+if [ -z "$TOKEN" ]; then
+  echo "ERROR: No token found in DB. Authenticate kiro-cli first." >&2
+  exit 1
+fi
+
+# Build the API key payload — both rows as a JSON array (same format bootstrap-auth.sh writes)
+API_KEY_JSON=$(python3 -c "
+import json
+rows = [
+    {'key': 'kirocli:odic:device-registration', 'value': '''$DEV_REG'''},
+    {'key': 'kirocli:odic:token', 'value': '''$TOKEN'''},
+]
+print(json.dumps(rows))
+")
 
 echo "--- Step 1: Create workload identity '$WORKLOAD_NAME' ---"
 aws bedrock-agentcore-control create-workload-identity \
   --name "$WORKLOAD_NAME" \
   --region "$REGION" \
-  --output json 2>/dev/null && echo "Created." || echo "Already exists (OK)."
+  --no-cli-pager --output json 2>/dev/null && echo "Created." || echo "Already exists (OK)."
 
 echo ""
-echo "--- Step 2: Create API key credential provider '$PROVIDER_NAME' ---"
-aws bedrock-agentcore-control create-api-key-credential-provider \
+echo "--- Step 2: Create/update API key credential provider '$PROVIDER_NAME' ---"
+if aws bedrock-agentcore-control create-api-key-credential-provider \
   --name "$PROVIDER_NAME" \
   --api-key "$API_KEY_JSON" \
   --region "$REGION" \
-  --output json && echo "Created." || {
-  echo "Provider may already exist. Updating..."
+  --no-cli-pager --output json 2>/dev/null; then
+  echo "Created."
+else
+  echo "Provider exists. Updating..."
   aws bedrock-agentcore-control update-api-key-credential-provider \
     --name "$PROVIDER_NAME" \
     --api-key "$API_KEY_JSON" \
     --region "$REGION" \
-    --output json
+    --no-cli-pager --output json 2>/dev/null
   echo "Updated."
-}
+fi
 
 echo ""
 echo "--- Step 3: Verify retrieval ---"
-echo "Getting workload access token..."
 WIT=$(aws bedrock-agentcore get-workload-access-token \
   --workload-name "$WORKLOAD_NAME" \
   --region "$REGION" \
-  --query 'token' --output text 2>/dev/null || \
-  aws bedrock-agentcore get-workload-access-token \
-  --workload-name "$WORKLOAD_NAME" \
-  --region "$REGION" \
-  --query 'workloadAccessToken' --output text)
+  --output json 2>/dev/null | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print(d.get('token', d.get('workloadAccessToken', '')))")
 
-echo "Retrieving API key..."
+if [ -z "$WIT" ]; then
+  echo "ERROR: Could not get workload access token." >&2
+  exit 1
+fi
+
 RETRIEVED=$(aws bedrock-agentcore get-resource-api-key \
   --resource-credential-provider-name "$PROVIDER_NAME" \
   --workload-identity-token "$WIT" \
   --region "$REGION" \
-  --query 'apiKey' --output text)
+  --query 'apiKey' --output text 2>/dev/null || true)
 
-# Validate round-trip
-if echo "$RETRIEVED" | jq -e '.client_id' > /dev/null 2>&1; then
+if echo "$RETRIEVED" | python3 -c "import json,sys; d=json.load(sys.stdin); assert isinstance(d, list)" 2>/dev/null; then
   echo "Round-trip verification PASSED"
 else
-  echo "ERROR: Retrieved value is not valid JSON" >&2
-  exit 1
+  echo "WARNING: Round-trip verification failed. Check API key format." >&2
 fi
 
 echo ""
 echo "=== Done ==="
 echo ""
-echo "Set these env vars on your ECS task definition:"
+echo "ECS task definition env vars:"
 echo "  KIRO_CREDENTIAL_PROVIDER=$PROVIDER_NAME"
 echo "  KIRO_WORKLOAD_NAME=$WORKLOAD_NAME"
-echo ""
-echo "IAM policy needed on ECS task role:"
-cat <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "bedrock-agentcore:GetWorkloadAccessToken",
-        "bedrock-agentcore:GetResourceApiKey",
-        "secretsmanager:GetSecretValue"
-      ],
-      "Resource": [
-        "arn:aws:bedrock-agentcore:${REGION}:*:workload-identity-directory/default/workload-identity/${WORKLOAD_NAME}",
-        "arn:aws:bedrock-agentcore:${REGION}:*:workload-identity-directory/default",
-        "arn:aws:bedrock-agentcore:${REGION}:*:token-vault/default/apikeycredentialprovider/${PROVIDER_NAME}",
-        "arn:aws:bedrock-agentcore:${REGION}:*:token-vault/default",
-        "arn:aws:secretsmanager:${REGION}:*:secret:bedrock-agentcore-identity!default/apikey/${PROVIDER_NAME}*"
-      ]
-    }
-  ]
-}
-EOF

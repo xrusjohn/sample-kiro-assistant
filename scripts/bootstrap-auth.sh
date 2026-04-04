@@ -117,26 +117,36 @@ print(d.get('token', d.get('workloadAccessToken', '')))" 2>/dev/null || true)
       # Check expiry
       DAYS_LEFT=$(echo "$API_KEY" | python3 -c "
 import json, sys, time
-d = json.load(sys.stdin)
-exp = d.get('expires_at', '')
-if exp:
-    from datetime import datetime
-    try:
-        exp_ts = datetime.fromisoformat(exp.replace('Z', '+00:00')).timestamp()
-        print(int((exp_ts - time.time()) / 86400))
-    except: print(999)
-else: print(999)" 2>/dev/null || echo 999)
+data = json.load(sys.stdin)
+# Handle both array-of-rows format and single-object format
+if isinstance(data, list):
+    for row in data:
+        v = json.loads(row.get('value','{}'))
+        exp = v.get('client_secret_expires_at', v.get('expires_at', ''))
+        if exp:
+            try:
+                ts = int(exp) if str(exp).isdigit() else 0
+                if ts > 0:
+                    print(int((ts - time.time()) / 86400)); sys.exit()
+            except: pass
+    print(999)
+else:
+    print(999)" 2>/dev/null || echo 999)
 
       if [ "$DAYS_LEFT" -le 0 ] 2>/dev/null; then
         echo "[bootstrap] WARNING: AgentCore Identity credentials expired. Falling through."
       else
         [ "$DAYS_LEFT" -le 14 ] 2>/dev/null && echo "[bootstrap] WARNING: Credentials expire in ${DAYS_LEFT} days."
-        # Transform to auth_kv rows
+        # Pipe directly to write_auth_rows — seed script stores in [{key,value},...] format
         echo "$API_KEY" | python3 -c "
 import json, sys
-d = json.load(sys.stdin)
-rows = [{'key': 'kirocli:oidc:device-registration', 'value': json.dumps(d)}]
-json.dump(rows, sys.stdout)" | write_auth_rows
+data = json.load(sys.stdin)
+# If already array-of-rows, pass through. If single object, wrap it.
+if isinstance(data, list):
+    json.dump(data, sys.stdout)
+else:
+    json.dump([{'key': 'kirocli:oidc:device-registration', 'value': json.dumps(data)}], sys.stdout)
+" | write_auth_rows
 
         echo "[bootstrap] Auth loaded from AgentCore Identity API Key Provider."
         if [ -n "${MIDWAY_COOKIE:-}" ]; then
