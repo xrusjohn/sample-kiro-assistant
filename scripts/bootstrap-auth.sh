@@ -8,7 +8,7 @@ mkdir -p "$DATA_DIR"
 
 # Skip if auth already present AND no external source is configured
 # (If KIRO_AUTH_SECRET_ARN is set, always refresh to pick up rotated tokens)
-if [ -z "${KIRO_AUTH_SECRET_ARN:-}" ] && [ -z "${KIRO_TOKEN_VAULT_ENDPOINT:-}" ] && [ -z "${KIRO_AUTH_S3_URI:-}" ] && [ -z "${KIRO_AUTH_JSON:-}" ]; then
+if [ -z "${KIRO_AUTH_SECRET_ARN:-}" ] && [ -z "${KIRO_TOKEN_VAULT_ENDPOINT:-}" ] && [ -z "${KIRO_AUTH_S3_URI:-}" ] && [ -z "${KIRO_AUTH_JSON:-}" ] && [ -z "${KIRO_CREDENTIAL_PROVIDER:-}" ]; then
   if [ -f "$DB_PATH" ] && sqlite3 "$DB_PATH" "SELECT 1 FROM auth_kv LIMIT 1" 2>/dev/null; then
     echo "[bootstrap] Auth DB already exists and no external source configured, skipping."
     if [ -n "${MIDWAY_COOKIE:-}" ]; then
@@ -89,6 +89,71 @@ json.dump(rows, sys.stdout)
   fi
 fi
 
+# --- Source 1b: AgentCore Identity API Key Credential Provider ---
+# Uses workload identity token to retrieve a JSON-encoded credential bundle
+# stored as an API key in AgentCore Identity Token Vault.
+if [ -n "${KIRO_CREDENTIAL_PROVIDER:-}" ] && [ -n "${KIRO_WORKLOAD_NAME:-}" ]; then
+  echo "[bootstrap] Trying AgentCore Identity API Key Provider: $KIRO_CREDENTIAL_PROVIDER"
+  REGION="${AWS_REGION:-us-east-1}"
+
+  # Step 1: Get workload access token
+  WIT=$(aws bedrock-agentcore get-workload-access-token \
+    --workload-name "$KIRO_WORKLOAD_NAME" \
+    --region "$REGION" \
+    --output json 2>/dev/null | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+print(d.get('token', d.get('workloadAccessToken', '')))" 2>/dev/null || true)
+
+  if [ -n "$WIT" ]; then
+    # Step 2: Get API key (JSON-encoded credential bundle)
+    API_KEY=$(aws bedrock-agentcore get-resource-api-key \
+      --resource-credential-provider-name "$KIRO_CREDENTIAL_PROVIDER" \
+      --workload-identity-token "$WIT" \
+      --region "$REGION" \
+      --query 'apiKey' --output text 2>/dev/null || true)
+
+    if [ -n "$API_KEY" ] && echo "$API_KEY" | python3 -c "import json,sys; json.load(sys.stdin)" 2>/dev/null; then
+      # Check expiry
+      DAYS_LEFT=$(echo "$API_KEY" | python3 -c "
+import json, sys, time
+d = json.load(sys.stdin)
+exp = d.get('expires_at', '')
+if exp:
+    from datetime import datetime
+    try:
+        exp_ts = datetime.fromisoformat(exp.replace('Z', '+00:00')).timestamp()
+        print(int((exp_ts - time.time()) / 86400))
+    except: print(999)
+else: print(999)" 2>/dev/null || echo 999)
+
+      if [ "$DAYS_LEFT" -le 0 ] 2>/dev/null; then
+        echo "[bootstrap] WARNING: AgentCore Identity credentials expired. Falling through."
+      else
+        [ "$DAYS_LEFT" -le 14 ] 2>/dev/null && echo "[bootstrap] WARNING: Credentials expire in ${DAYS_LEFT} days."
+        # Transform to auth_kv rows
+        echo "$API_KEY" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+rows = [{'key': 'kirocli:oidc:device-registration', 'value': json.dumps(d)}]
+json.dump(rows, sys.stdout)" | write_auth_rows
+
+        echo "[bootstrap] Auth loaded from AgentCore Identity API Key Provider."
+        if [ -n "${MIDWAY_COOKIE:-}" ]; then
+          mkdir -p "$HOME/.midway"
+          echo "$MIDWAY_COOKIE" > "$HOME/.midway/cookie"
+          echo "[bootstrap] Midway cookie written."
+        fi
+        exec "$@"
+      fi
+    else
+      echo "[bootstrap] AgentCore Identity API key fetch failed or invalid JSON. Falling through."
+    fi
+  else
+    echo "[bootstrap] Workload access token fetch failed. Falling through."
+  fi
+fi
+
 # --- Source 2: ECS native secrets injection (KIRO_AUTH_JSON env var) ---
 if [ -n "${KIRO_AUTH_JSON:-}" ]; then
   echo "[bootstrap] Loading auth from KIRO_AUTH_JSON (ECS native injection)."
@@ -149,5 +214,5 @@ if [ -n "${KIRO_AUTH_FILE:-}" ]; then
 fi
 
 echo "[bootstrap] ERROR: No auth source available."
-echo "[bootstrap] Set one of: KIRO_TOKEN_VAULT_ENDPOINT, KIRO_AUTH_SECRET_ARN, KIRO_AUTH_S3_URI, KIRO_AUTH_FILE"
+echo "[bootstrap] Set one of: KIRO_TOKEN_VAULT_ENDPOINT, KIRO_CREDENTIAL_PROVIDER+KIRO_WORKLOAD_NAME, KIRO_AUTH_SECRET_ARN, KIRO_AUTH_S3_URI, KIRO_AUTH_FILE"
 exit 1

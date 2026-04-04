@@ -72,6 +72,38 @@ This is already correct in `agentcore-runner.ts`. Anyone testing manually should
 
 - **Token Vault is a REST endpoint, not env var injection** — the container calls `GET /credentials/kirocli-oidc` against the vault endpoint. The existing `bootstrap-auth.sh` already handles `KIRO_TOKEN_VAULT_ENDPOINT`. Pass `KIRO_AUTH_SECRET_ARN` as an env var and the bootstrap falls through to Secrets Manager.
 
+### AgentCore Identity Token Vault Integration (2026-04-04)
+
+Added a new auth source (Source 1b) to `bootstrap-auth.sh` that uses the AgentCore Identity API Key Credential Provider. This sits between the existing REST-based Token Vault endpoint (Source 1) and the ECS native injection path (Source 2). All existing sources are preserved — this is additive.
+
+**How it works:**
+
+1. ECS task role calls `get-workload-access-token` → gets a workload identity token
+2. Workload token calls `get-resource-api-key` → retrieves JSON credential bundle from Token Vault
+3. `bootstrap-auth.sh` parses the JSON and writes it to the `auth_kv` SQLite table as `kirocli:oidc:device-registration`
+
+**The trick:** AgentCore Identity doesn't have a "structured credential bundle" type. We JSON-encode our 3-field bundle (`client_id`, `client_secret`, `refresh_token`) into a single API key string via `create-api-key-credential-provider`. Token Vault stores it in Secrets Manager under the hood, but access is mediated through the workload identity flow.
+
+**Files:**
+- `scripts/bootstrap-auth.sh` — Source 1b added (existing sources untouched)
+- `scripts/seed-kiro-credentials.sh` — one-time setup (creates workload identity + API key provider, verifies round-trip)
+- `docs/agentcore-identity-credential-lifecycle.md` — full lifecycle docs
+
+**ECS env vars needed:**
+```
+KIRO_CREDENTIAL_PROVIDER=kiro-cli-creds
+KIRO_WORKLOAD_NAME=kiro-subagent
+```
+
+**90-day lifecycle:** kiro-cli refresh tokens expire ~90 days. `bootstrap-auth.sh` warns at 14 days remaining, falls through to next source at expiry. Renewal = re-auth locally + re-run seed script.
+
+**Why bother when we already have Secrets Manager?** Workload identity binding, Token Vault access control layer, audit trail. More importantly: this is the first step toward proper OIDC and Midway integration through AgentCore Identity. Getting the plumbing in place now means less rework later.
+
+**Open questions:**
+- Does `update-api-key-credential-provider` exist? The seed script assumes it does for renewal. Need to verify.
+- Token Vault secret path for API keys — assumed `bedrock-agentcore-identity!default/apikey/<name>` but haven't confirmed the exact pattern.
+- The `get-workload-access-token` response field name — docs show `token`, SDK shows `workloadAccessToken`. bootstrap-auth.sh tries both via python.
+
 ---
 
 ## A2A ↔ ACP Mapping
