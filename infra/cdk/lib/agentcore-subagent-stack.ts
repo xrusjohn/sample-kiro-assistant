@@ -9,18 +9,18 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as s3assets from "aws-cdk-lib/aws-s3-assets";
 import * as agentcore from "@aws-cdk/aws-bedrock-agentcore-alpha";
 import { Construct } from "constructs";
-import { KiroNetworkStack } from "./network-stack";
+import { RelayNetworkStack } from "./network-stack";
 import { join } from "path";
 
-export interface KiroAgentCoreStackProps extends cdk.StackProps {
-  network: KiroNetworkStack;
+export interface RelayAgentCoreStackProps extends cdk.StackProps {
+  network: RelayNetworkStack;
   kiroAuthSecretArn?: string;
 }
 
-export class KiroAgentCoreStack extends cdk.Stack {
+export class RelayAgentCoreStack extends cdk.Stack {
   public readonly agentRuntimeArn: string;
 
-  constructor(scope: Construct, id: string, props: KiroAgentCoreStackProps) {
+  constructor(scope: Construct, id: string, props: RelayAgentCoreStackProps) {
     super(scope, id, props);
 
     const kiroAuthSecretArn = props.kiroAuthSecretArn
