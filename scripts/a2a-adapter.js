@@ -219,9 +219,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && req.url === "/") {
-    let body = "";
-    req.on("data", d => body += d);
+    const chunks = [];
+    req.on("data", d => chunks.push(d));
     req.on("end", async () => {
+      const body = Buffer.concat(chunks).toString("utf8");
       let rpcReq;
       try { rpcReq = JSON.parse(body); } catch {
         res.writeHead(200, { "Content-Type": "application/json" });

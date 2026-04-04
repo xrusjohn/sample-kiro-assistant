@@ -1,0 +1,11 @@
+node_modules
+.git
+cdk.out
+dist*
+infra/cdk/node_modules
+infra/cdk/cdk.out
+src/ui
+src/electron
+relay-auth-seed.sqlite3
+*.sqlite3
+logs/
