@@ -8,6 +8,17 @@
 #
 set -euo pipefail
 
+# Locate kiro-cli auth DB across platforms
+find_kiro_db() {
+  for p in \
+    "$HOME/.local/share/kiro-cli/data.sqlite3" \
+    "$HOME/Library/Application Support/kiro-cli/data.sqlite3" \
+    "$HOME/.kiro-cli/data.sqlite3"; do
+    [ -f "$p" ] && echo "$p" && return 0
+  done
+  return 1
+}
+
 AGENT="${1:-}"
 PORT="${PORT:-8080}"
 
@@ -25,7 +36,7 @@ if [ "$AGENT" = "kiro" ]; then
   echo "=== Building $IMAGE ==="
   docker build -f "$DOCKERFILE" -t "$IMAGE" .
 
-  # Determine auth flags
+  # Determine auth flags (same sources as ECS/AgentCore — no local sqlite mount)
   AUTH_FLAGS=()
   if [ -n "${KIRO_CREDENTIAL_PROVIDER:-}" ]; then
     echo "Auth: AgentCore Identity (KIRO_CREDENTIAL_PROVIDER=$KIRO_CREDENTIAL_PROVIDER)"
@@ -36,12 +47,15 @@ if [ "$AGENT" = "kiro" ]; then
     echo "Auth: Secrets Manager (KIRO_AUTH_SECRET_ARN)"
     AUTH_FLAGS+=(-e "KIRO_AUTH_SECRET_ARN=$KIRO_AUTH_SECRET_ARN")
     AUTH_FLAGS+=(-v "$HOME/.aws:/home/kiro/.aws:ro")
-  elif [ -f "$HOME/.local/share/kiro-cli/data.sqlite3" ]; then
-    echo "Auth: local kiro-cli auth DB (mounted read-only)"
-    AUTH_FLAGS+=(-v "$HOME/.local/share/kiro-cli/data.sqlite3:/home/kiro/.local/share/kiro-cli/data.sqlite3:ro")
+  elif [ -n "${KIRO_AUTH_JSON:-}" ]; then
+    echo "Auth: inline KIRO_AUTH_JSON"
+    AUTH_FLAGS+=(-e "KIRO_AUTH_JSON=$KIRO_AUTH_JSON")
   else
-    echo "WARNING: No auth source found. Container will fail at bootstrap."
-    echo "  Options: set KIRO_CREDENTIAL_PROVIDER, KIRO_AUTH_SECRET_ARN, or authenticate kiro-cli locally."
+    echo "ERROR: No auth source set."
+    echo "  KIRO_CREDENTIAL_PROVIDER + KIRO_WORKLOAD_NAME  (AgentCore Identity)"
+    echo "  KIRO_AUTH_SECRET_ARN                            (Secrets Manager)"
+    echo "  KIRO_AUTH_JSON                                  (inline, for quick tests)"
+    exit 1
   fi
 
   echo "=== Running $IMAGE on :$PORT ==="
