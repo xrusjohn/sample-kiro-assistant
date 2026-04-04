@@ -18,7 +18,7 @@ import http from "node:http";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const PORT = 9000;
+const PORT = parseInt(process.env.PORT ?? "9000", 10);
 const IDLE_TIMEOUT_MS = parseInt(process.env.IDLE_TIMEOUT_MS ?? "900000", 10); // 15 min
 const KIRO_BINARY = process.env.KIRO_BINARY ?? "kiro-cli";
 
