@@ -2,7 +2,7 @@
 # Start both ACP bridge (8080) and A2A adapter (9000)
 set -eu
 
-node /home/kiro/a2a-adapter.js &
+node --experimental-modules /home/kiro/a2a-adapter.js &
 A2A_PID=$!
 
 node /home/kiro/acp-bridge.js &

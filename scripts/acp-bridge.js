@@ -3,8 +3,8 @@
 // Uses `script -q -c` to give kiro-cli a PTY on stdin while keeping
 // clean pipes for the bridge to read/write JSON-RPC.
 
-const net = require("net");
-const { spawn } = require("child_process");
+import net from "node:net";
+import { spawn } from "node:child_process";
 
 const PORT = parseInt(process.env.ACP_PORT || "8080", 10);
 const BINARY = process.env.KIRO_BINARY || "kiro-cli";

@@ -24,6 +24,7 @@ RUN chmod +x /home/kiro/bootstrap-auth.sh /home/kiro/agentcore-entrypoint.sh /ho
 
 USER kiro
 WORKDIR /home/kiro
+RUN echo '{"type":"module"}' > /home/kiro/package.json
 
 # Install kiro-cli for the target architecture
 RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
