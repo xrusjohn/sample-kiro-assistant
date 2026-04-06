@@ -29,7 +29,7 @@ export class RelayAgentCoreStack extends cdk.Stack {
     // Import existing ECR repo
     const repo = ecr.Repository.fromRepositoryName(this, "Repo", "kiro-agentcore");
 
-    // Source asset: repo root (Dockerfile.agentcore + scripts/)
+    // Source asset: repo root (Dockerfile.kiro-cli + scripts/)
     const source = new s3assets.Asset(this, "Source", {
       path: join(__dirname, "..", "..", ".."),
       exclude: ["node_modules", ".git", "cdk.out", "dist*", "infra/cdk/node_modules", "infra/cdk/cdk.out"],
@@ -69,7 +69,7 @@ export class RelayAgentCoreStack extends cdk.Stack {
         version: "0.2",
         phases: {
           pre_build: { commands: ["aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REPO_URI"] },
-          build: { commands: ["docker build -f Dockerfile.agentcore -t $REPO_URI:latest ."] },
+          build: { commands: ["docker build -f Dockerfile.kiro-cli -t $REPO_URI:latest ."] },
           post_build: { commands: ["docker push $REPO_URI:latest"] },
         },
       }),
