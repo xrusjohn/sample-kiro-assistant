@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import "source-map-support/register";
 import * as cdk from "aws-cdk-lib";
-import { KiroNetworkStack } from "../lib/network-stack";
-import { KiroOrchestratorStack } from "../lib/orchestrator-stack";
-import { KiroEcsSubAgentStack } from "../lib/ecs-subagent-stack";
-import { KiroAgentCoreStack } from "../lib/agentcore-subagent-stack";
+import { RelayNetworkStack } from "../lib/network-stack";
+import { RelayOrchestratorStack } from "../lib/orchestrator-stack";
+import { RelayEcsSubAgentStack } from "../lib/ecs-subagent-stack";
+import { RelayAgentCoreStack } from "../lib/agentcore-subagent-stack";
 
 const app = new cdk.App();
 
@@ -28,7 +28,7 @@ const vpcConfig = {
 };
 
 // Stack 1: Network + shared resources
-const network = new KiroNetworkStack(app, "KiroNetwork", {
+const network = new RelayNetworkStack(app, "RelayNetwork", {
   env,
   ...vpcConfig,
   certificateArn: "arn:aws:acm:us-east-1:441262788356:certificate/9612cb7f-9768-4c30-a2b9-7f6da4ee594e",
@@ -36,7 +36,7 @@ const network = new KiroNetworkStack(app, "KiroNetwork", {
 });
 
 // Stack 2: Orchestrator ECS service
-const orchestrator = new KiroOrchestratorStack(app, "KiroOrchestrator", {
+const orchestrator = new RelayOrchestratorStack(app, "RelayOrchestrator", {
   env,
   network,
   privateSubnetIds: vpcConfig.privateSubnetIds,
@@ -44,14 +44,14 @@ const orchestrator = new KiroOrchestratorStack(app, "KiroOrchestrator", {
 });
 
 // Stack 3: ECS sub-agent task definitions (kiro-cli + claude-code)
-const ecsSubAgents = new KiroEcsSubAgentStack(app, "KiroEcsSubAgents", {
+const ecsSubAgents = new RelayEcsSubAgentStack(app, "RelayEcsSubAgents", {
   env,
   network,
-  kiroAuthSecretArn: "arn:aws:secretsmanager:us-east-1:441262788356:secret:kiro/auth-sqlite-XXXXXX",
+  kiroAuthSecretArn: "arn:aws:secretsmanager:us-east-1:441262788356:secret:kiro/auth-sqlite-u9E7FN",
 });
 
 // Stack 4: AgentCore Runtime (cowboy's stack)
-const agentCore = new KiroAgentCoreStack(app, "KiroAgentCore", {
+const agentCore = new RelayAgentCoreStack(app, "RelayAgentCore", {
   env,
   network,
 });
