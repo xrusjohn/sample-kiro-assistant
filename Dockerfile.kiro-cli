@@ -18,6 +18,7 @@ RUN useradd -m -s /bin/bash kiro
 COPY --chown=kiro:kiro scripts/bootstrap-auth.sh /home/kiro/bootstrap-auth.sh
 COPY --chown=kiro:kiro scripts/acp-bridge.js /home/kiro/acp-bridge.js
 COPY --chown=kiro:kiro scripts/a2a-adapter.js /home/kiro/a2a-adapter.js
+COPY --chown=kiro:kiro scripts/mcp-agent-tool.js /home/kiro/mcp-agent-tool.js
 COPY --chown=kiro:kiro scripts/agentcore-entrypoint.sh /home/kiro/agentcore-entrypoint.sh
 COPY --chown=kiro:kiro scripts/start-both.sh /home/kiro/start-both.sh
 RUN chmod +x /home/kiro/bootstrap-auth.sh /home/kiro/agentcore-entrypoint.sh /home/kiro/start-both.sh
@@ -37,7 +38,7 @@ RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
 
 ENV PATH="/home/kiro/.local/bin:${PATH}"
 
-# Default: bilingual — ACP bridge on 8080 + A2A adapter on 9000
-EXPOSE 8080 9000
+# Default: trilingual — ACP :8080, A2A :9000, MCP :8000
+EXPOSE 8080 9000 8000
 ENTRYPOINT ["/home/kiro/bootstrap-auth.sh"]
 CMD ["/home/kiro/start-both.sh"]
