@@ -1,0 +1,30 @@
+{
+  "name": "workshop-researcher",
+  "description": "Agent that crawls AWS Workshop Studio sites, indexes them into local knowledge, persists to S3, and answers questions about the content",
+  "mcpServers": {
+    "workshop-export": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["/home/xrusjohn/projects/sample-kiro-assistant/scripts/workshop-export-tool.py"],
+      "env": {},
+      "disabled": false
+    }
+  },
+  "tools": [
+    "@workshop-export",
+    "read", "glob", "grep", "write", "shell",
+    "web_search", "web_fetch",
+    "knowledge", "todo"
+  ],
+  "allowedTools": [
+    "@workshop-export",
+    "read", "glob", "grep", "write", "shell",
+    "web_search", "web_fetch",
+    "knowledge", "todo"
+  ],
+  "resources": [
+    "skill:///home/xrusjohn/.kiro/skills/workshop-researcher/SKILL.md"
+  ],
+  "prompt": "You are a workshop researcher agent. You crawl AWS Workshop Studio sites, export their content, index it into your knowledge base, and then answer questions about the material. Always index after exporting.",
+  "model": "claude-sonnet-4"
+}
