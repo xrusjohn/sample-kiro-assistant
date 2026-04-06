@@ -97,13 +97,32 @@ Orchestrator
       └─ browser_navigate(session_id, w.amazon.com) → extract data
 ```
 
+## DCV Live View Integration
+
+AgentCore Browser's live view is powered by AWS DCV. Each browser session launches a dedicated DCV server that streams the browser interface with real-time interaction.
+
+Key requirements:
+- **DCV Web Client SDK** — JS library that renders the stream in a `<div>`
+- **SigV4 signed URL** — the `live_view_url` needs IAM auth as query params (raw URL returns 501)
+- **Backend presigner** — Express endpoint generates signed URL from session ID
+- **Frontend component** — React component embeds DCV client in our UI
+
+Reference: https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-dcv-integration.html
+
+```js
+// Frontend: embed DCV viewer
+dcv.authenticate(presignedUrl, {
+  success: (auth, result) => {
+    dcv.connect({ url: presignedUrl, sessionId, authToken, divId: 'dcv-display' });
+  }
+});
+```
+
+This eliminates the console hop — user sees the browser in our UI, taps OTP, never leaves the app.
+
 ## Next Steps / Ideas
 
-1. **Embedded browser viewer in orchestrator UI** — eliminate the console hop for OTP tap. Explore:
-   - NICE DCV for remote desktop streaming
-   - Nova Act browser patterns
-   - Embedding AgentCore Browser live view in our web UI
-   - iframe or WebRTC-based viewer
+1. **Embedded DCV browser viewer in orchestrator UI** — spike on DCV Web Client SDK integration in our React app
 
 2. **Windows-native agent** — run the agent directly on Windows, no tunnel needed. Agent uses local Chrome via CDP. Full AEA, zero-tap.
 
