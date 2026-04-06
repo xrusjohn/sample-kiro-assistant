@@ -64,9 +64,10 @@ if [ "$AGENT" = "kiro" ]; then
 
   resolve_aws_creds
 
-  echo "=== Running $IMAGE on :$PORT ==="
+  echo "=== Running $IMAGE — ACP on :$PORT, A2A on :9000 ==="
   exec docker run --rm -it \
     -p "$PORT:8080" \
+    -p 9000:9000 \
     -e "AWS_REGION=${AWS_REGION:-us-east-1}" \
     $(aws_cred_flags) \
     "${AUTH_FLAGS[@]}" \

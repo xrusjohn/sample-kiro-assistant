@@ -4,7 +4,7 @@
 # Build for x86_64 (ECS Fargate):
 #   docker build -f Dockerfile.kiro-cli -t <tag> .
 
-FROM ubuntu:24.04
+FROM public.ecr.aws/ubuntu/ubuntu:24.04
 
 ARG TARGETARCH
 
@@ -19,7 +19,8 @@ COPY --chown=kiro:kiro scripts/bootstrap-auth.sh /home/kiro/bootstrap-auth.sh
 COPY --chown=kiro:kiro scripts/acp-bridge.js /home/kiro/acp-bridge.js
 COPY --chown=kiro:kiro scripts/a2a-adapter.js /home/kiro/a2a-adapter.js
 COPY --chown=kiro:kiro scripts/agentcore-entrypoint.sh /home/kiro/agentcore-entrypoint.sh
-RUN chmod +x /home/kiro/bootstrap-auth.sh /home/kiro/agentcore-entrypoint.sh
+COPY --chown=kiro:kiro scripts/start-both.sh /home/kiro/start-both.sh
+RUN chmod +x /home/kiro/bootstrap-auth.sh /home/kiro/agentcore-entrypoint.sh /home/kiro/start-both.sh
 
 USER kiro
 WORKDIR /home/kiro
@@ -35,10 +36,7 @@ RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x86_64") && \
 
 ENV PATH="/home/kiro/.local/bin:${PATH}"
 
-# Default: ECS mode (ACP bridge over TCP)
+# Default: bilingual — ACP bridge on 8080 + A2A adapter on 9000
+EXPOSE 8080 9000
 ENTRYPOINT ["/home/kiro/bootstrap-auth.sh"]
-CMD ["node", "/home/kiro/acp-bridge.js"]
-
-# AgentCore mode: override entrypoint via Runtime config or docker run:
-#   --entrypoint /home/kiro/agentcore-entrypoint.sh
-# (starts a2a-adapter on port 9000 instead of acp-bridge on port 8080)
+CMD ["/home/kiro/start-both.sh"]
