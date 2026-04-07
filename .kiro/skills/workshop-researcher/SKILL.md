@@ -1,3 +1,14 @@
+---
+name: workshop-researcher
+description: Crawl AWS Workshop Studio sites, index their content, and answer questions about the material.
+triggers:
+  - workshop
+  - aws workshop
+  - catalog.workshops.aws
+  - knowledge base
+  - workshop export
+---
+
 # Workshop Researcher
 
 Crawl AWS Workshop Studio sites and index their content for instant Q&A.
