@@ -17,7 +17,7 @@ interface AgentInstance {
   metadata: Record<string, unknown>;
   registeredAt: number;
   lastSeen: number;
-  status: 'online' | 'offline' | 'unknown';
+  status: 'online' | 'offline' | 'degraded' | 'unknown';
 }
 
 interface AgentProfile {
@@ -31,7 +31,7 @@ interface AgentProfile {
   cardTemplate: object;
 }
 
-type Coverage = Record<string, { online: number; offline: number }>;
+type Coverage = Record<string, { online: number; offline: number; degraded: number }>;
 
 const PLATFORMS = ['any', 'linux', 'cdm', 'windows', 'agentcore'];
 
@@ -253,26 +253,26 @@ export function AgentsPanel() {
     flexShrink: 0,
   };
 
-  const badgeStyle = (online: boolean): React.CSSProperties => ({
+  const badgeStyle = (online: boolean, degraded?: boolean): React.CSSProperties => ({
     display: 'inline-flex',
     alignItems: 'center',
     gap: 4,
-    background: online ? '#1a3a1a' : '#2a2a2a',
-    border: `1px solid ${online ? '#2d6a2d' : '#3d3d3d'}`,
+    background: degraded ? '#3a3a1a' : online ? '#1a3a1a' : '#2a2a2a',
+    border: `1px solid ${degraded ? '#6a6a2d' : online ? '#2d6a2d' : '#3d3d3d'}`,
     borderRadius: 12,
     padding: '2px 8px',
     fontSize: 11,
-    color: online ? '#6fcf6f' : '#888',
+    color: degraded ? '#cfcf6f' : online ? '#6fcf6f' : '#888',
     fontWeight: 500,
   });
 
-  const instanceRowStyle = (online: boolean): React.CSSProperties => ({
+  const instanceRowStyle = (online: boolean, degraded?: boolean): React.CSSProperties => ({
     background: '#1e1e38',
-    border: '1px solid #2d2d44',
+    border: `1px solid ${degraded ? '#4a4a2d' : '#2d2d44'}`,
     borderRadius: 8,
     padding: '10px 12px',
     marginBottom: 8,
-    opacity: online ? 1 : 0.55,
+    opacity: online || degraded ? 1 : 0.55,
   });
 
   const btnStyle = (variant: 'danger' | 'primary' | 'secondary' = 'secondary'): React.CSSProperties => ({
@@ -333,11 +333,12 @@ export function AgentsPanel() {
           {PLATFORMS.map(platform => {
             const cov = coverage[platform];
             const online = cov ? cov.online > 0 : false;
+            const hasDegraded = cov ? (cov.degraded ?? 0) > 0 : false;
             return (
-              <span key={platform} style={badgeStyle(online)}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: online ? '#6fcf6f' : '#555', display: 'inline-block' }} />
+              <span key={platform} style={badgeStyle(online, hasDegraded)}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: hasDegraded ? '#cfcf6f' : online ? '#6fcf6f' : '#555', display: 'inline-block' }} />
                 {platform}
-                {cov && <span style={{ color: '#666', fontSize: 10 }}>({cov.online}/{(cov.online + cov.offline)})</span>}
+                {cov && <span style={{ color: '#666', fontSize: 10 }}>({cov.online}/{(cov.online + (cov.degraded ?? 0) + cov.offline)})</span>}
               </span>
             );
           })}
@@ -460,29 +461,36 @@ interface InstanceRowProps {
   instance: AgentInstance;
   profiles: AgentProfile[];
   onDeregister: (id: string) => void;
-  instanceRowStyle: (online: boolean) => React.CSSProperties;
+  instanceRowStyle: (online: boolean, degraded?: boolean) => React.CSSProperties;
   btnStyle: (variant?: 'danger' | 'primary' | 'secondary') => React.CSSProperties;
   platformBadge: (platform: string) => React.CSSProperties;
 }
 
 function InstanceRow({ instance, profiles, onDeregister, instanceRowStyle, btnStyle, platformBadge }: InstanceRowProps) {
   const online = instance.status === 'online';
+  const degraded = instance.status === 'degraded';
   const profile = profiles.find(p => p.id === instance.profileId);
   const label = profile?.label ?? instance.card?.name ?? instance.profileId;
   const allTags = Array.from(new Set(
     (instance.card?.skills ?? []).flatMap(s => s.tags ?? [])
   ));
+  const dotColor = online ? '#6fcf6f' : degraded ? '#cfcf6f' : '#e05555';
+  const labelColor = online ? '#e0e0e0' : degraded ? '#cfcf6f' : '#888';
 
   return (
-    <div style={instanceRowStyle(online)}>
+    <div style={instanceRowStyle(online, degraded)}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: online ? '#6fcf6f' : '#e05555', display: 'inline-block', flexShrink: 0 }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: online ? '#e0e0e0' : '#888' }}>{label}</span>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, display: 'inline-block', flexShrink: 0 }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: labelColor }}>{label}</span>
             <span style={platformBadge(instance.platform)}>{instance.platform}</span>
+            {degraded && <span style={{ fontSize: 10, color: '#cfcf6f', background: '#3a3a1a', borderRadius: 4, padding: '1px 6px' }}>needs attention</span>}
           </div>
           <div style={{ marginTop: 4, fontSize: 11, color: '#6060a0', wordBreak: 'break-all' }}>{instance.url}</div>
+          {degraded && (instance as any).degradedReason && (
+            <div style={{ marginTop: 3, fontSize: 10, color: '#cfcf6f' }}>⚠ {(instance as any).degradedReason}</div>
+          )}
           {allTags.length > 0 && (
             <div style={{ marginTop: 5, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
               {allTags.map(tag => (

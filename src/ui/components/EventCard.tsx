@@ -294,17 +294,24 @@ const AssistantBlockCard = ({
   showIndicator?: boolean;
   badge?: string;
 }) => (
-  <div className="flex flex-col mt-4">
-    <div className="header text-accent flex items-center gap-2">
+  <div className="flex items-start gap-3 mt-6">
+    <div className="flex flex-col items-center gap-1 shrink-0 pt-1">
+      <span className="w-8 h-8 rounded-full bg-emerald-600/20 flex items-center justify-center text-sm">🤖</span>
       <StatusDot variant="success" isActive={showIndicator} isVisible={showIndicator} />
-      {title}
-      {badge && (
-        <span className="rounded-full bg-surface-secondary px-3 py-0.5 text-xs font-medium text-ink-700">
-          {badge}
-        </span>
-      )}
     </div>
-    <MDContent text={text} />
+    <div className="min-w-0 flex-1 max-w-[85%]">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500">{title}</span>
+        {badge && (
+          <span className="rounded-full bg-surface-tertiary px-2 py-0.5 text-[9px] font-medium text-ink-600">
+            {badge}
+          </span>
+        )}
+      </div>
+      <div className="rounded-2xl bg-surface-secondary/80 px-5 py-3.5">
+        <MDContent text={text} />
+      </div>
+    </div>
   </div>
 );
 
@@ -330,15 +337,11 @@ const ToolUseCard = ({
   if (!isToolUse) return null;
 
   return (
-    <div className="flex flex-col gap-2 rounded-[1rem] bg-surface-tertiary px-3 py-2 mt-4 overflow-hidden">
-      <div className="flex flex-row items-center gap-2 min-w-0">
+    <div className="ml-11 mt-2">
+      <div className="flex flex-row items-center gap-2 rounded-xl bg-surface-tertiary/60 px-3 py-2 overflow-hidden">
         <StatusDot variant={statusVariant} isActive={isPending && showIndicator} isVisible={shouldShowDot} />
-        <div className="flex flex-row items-center gap-2 tool-use-item min-w-0 flex-1">
-          <span className="inline-flex items-center rounded-md text-accent py-0.5 text-sm font-medium shrink-0">
-            {messageContent.name}
-          </span>
-          <span className="text-sm text-muted truncate">{getToolInfo(messageContent)}</span>
-        </div>
+        <span className="text-xs text-accent font-medium shrink-0">🛠️ {messageContent.name}</span>
+        <span className="text-xs text-ink-500 truncate">{getToolInfo(messageContent)}</span>
       </div>
     </div>
   );
@@ -436,17 +439,35 @@ const UserMessageCard = ({
   message,
   showIndicator = false
 }: {
-  message: { type: "user_prompt"; prompt: string };
+  message: { type: "user_prompt"; prompt: string; source?: string };
   showIndicator?: boolean;
-}) => (
-  <div className="flex flex-col mt-4">
-    <div className="header text-accent flex items-center gap-2">
-      <StatusDot variant="success" isActive={showIndicator} isVisible={showIndicator} />
-      User
+}) => {
+  const isSuper = message.source && message.source !== 'user';
+  const label = isSuper ? message.source : 'You';
+  const avatar = isSuper ? '⚡' : '👤';
+  return (
+    <div className="flex justify-end mt-6">
+      <div className="flex items-start gap-3 max-w-[85%]">
+        <div className={`rounded-2xl px-5 py-3.5 ${
+          isSuper
+            ? 'bg-gradient-to-br from-yellow-600/30 to-yellow-800/20'
+            : 'bg-gradient-to-br from-accent/30 to-accent/10'
+        }`}>
+          <MDContent text={message.prompt} />
+        </div>
+        <div className="flex flex-col items-center gap-1 shrink-0 pt-1">
+          <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+            isSuper ? 'bg-yellow-600/30' : 'bg-accent/20'
+          }`}>{avatar}</span>
+          <span className={`text-[9px] font-medium uppercase ${
+            isSuper ? 'text-yellow-500/70' : 'text-accent/50'
+          }`}>{label}</span>
+          <StatusDot variant="success" isActive={showIndicator} isVisible={showIndicator} />
+        </div>
+      </div>
     </div>
-    <MDContent text={message.prompt} />
-  </div>
-);
+  );
+};
 
 export function MessageCard({
   message,

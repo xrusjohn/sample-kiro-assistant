@@ -79,7 +79,7 @@ function emit(event: ServerEvent) {
     if (event.payload.status === "idle") pushDbToS3();
   }
   if (event.type === "stream.message") sessions.recordMessage(event.payload.sessionId, event.payload.message);
-  if (event.type === "stream.user_prompt") sessions.recordMessage(event.payload.sessionId, { type: "user_prompt", prompt: event.payload.prompt });
+  if (event.type === "stream.user_prompt") sessions.recordMessage(event.payload.sessionId, { type: "user_prompt", prompt: event.payload.prompt, source: event.payload.source });
   broadcastFn(event);
 }
 
@@ -191,7 +191,7 @@ export function handleClientEvent(event: ClientEvent) {
 
       const initialPrompt = event.payload.prompt;
       setTimeout(() => {
-        emit({ type: "stream.user_prompt", payload: { sessionId: session.id, prompt: initialPrompt } });
+        emit({ type: "stream.user_prompt", payload: { sessionId: session.id, prompt: initialPrompt, source: (event.payload as any).source } });
       }, 200);
 
       a2aHandle.sendPrompt(event.payload.prompt);
@@ -250,7 +250,7 @@ export function handleClientEvent(event: ClientEvent) {
 
     manager.markActive(session.id);
     sessions.updateSession(session.id, { lastPrompt: event.payload.prompt });
-    emit({ type: "stream.user_prompt", payload: { sessionId: session.id, prompt: event.payload.prompt } });
+    emit({ type: "stream.user_prompt", payload: { sessionId: session.id, prompt: event.payload.prompt, source: (event.payload as any).source } });
 
     handle.sendPrompt(event.payload.prompt);
     return;

@@ -14,6 +14,7 @@ export type ClaudeSettingsEnv = {
 export type UserPromptMessage = {
   type: "user_prompt";
   prompt: string;
+  source?: string;  // e.g. 'user', 'supervisor', 'agent'
 };
 
 export type StreamMessage = AgentMessage | UserPromptMessage;
@@ -41,7 +42,7 @@ export type SessionInfo = {
 // Server -> Client events
 export type ServerEvent =
   | { type: "stream.message"; payload: { sessionId: string; message: StreamMessage } }
-  | { type: "stream.user_prompt"; payload: { sessionId: string; prompt: string } }
+  | { type: "stream.user_prompt"; payload: { sessionId: string; prompt: string; source?: string } }
   | { type: "session.status"; payload: { sessionId: string; status: SessionStatus; title?: string; cwd?: string; error?: string; instanceId?: string } }
   | { type: "session.list"; payload: { sessions: SessionInfo[] } }
   | { type: "session.history"; payload: { sessionId: string; status: SessionStatus; messages: StreamMessage[] } }
