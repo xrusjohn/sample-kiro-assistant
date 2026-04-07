@@ -1,5 +1,12 @@
 # Design Seed: Diagram-as-Code Tool & Skill
 
+> **Status: Phase 1 shipped.** `scripts/diagram-mcp-tool.cjs` is the local MCP tool.
+> The `architecture-diagrams` skill is live in `~/.kiro/skills/`.
+> Phase 2 (Lambda) and Phase 3 (Code Interpreter) are still open.
+
+---
+
+
 ## Problem
 
 The agent needs to create architecture diagrams. Today this is done by writing

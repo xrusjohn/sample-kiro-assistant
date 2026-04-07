@@ -1,0 +1,40 @@
+# Claude Code sub-agent container
+# Auth: IAM task role (ECS/AgentCore) — no bootstrap script needed
+#
+# Build:
+#   docker build -t claude-code-agent -f Dockerfile.claude-code .
+#   docker buildx build --platform linux/arm64 -f Dockerfile.claude-code .  # for AgentCore
+#
+# Run (ECS mode — TCP bridge):
+#   docker run -p 8080:8080 -e KIRO_BINARY=claude-agent-acp claude-code-agent
+#
+# Run (AgentCore mode — A2A adapter):
+#   docker run -p 9000:9000 -e AGENTCORE_RUNTIME=true -e KIRO_BINARY=claude-agent-acp claude-code-agent
+
+FROM public.ecr.aws/docker/library/node:20-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI globally
+RUN npm install -g @anthropic-ai/claude-code
+
+# Create non-root user
+RUN useradd -m -s /bin/bash agent
+USER agent
+WORKDIR /home/agent
+
+# Copy bridge and adapter scripts
+COPY --chown=agent:agent scripts/acp-bridge.js /home/agent/acp-bridge.js
+COPY --chown=agent:agent scripts/a2a-adapter.js /home/agent/a2a-adapter.js
+
+# Default: claude-agent-acp (bridge and adapter read KIRO_BINARY)
+ENV KIRO_BINARY=claude-agent-acp
+ENV NODE_ENV=production
+
+# Entrypoint: detect mode and start appropriate server
+COPY --chown=agent:agent scripts/claude-code-entrypoint.sh /home/agent/entrypoint.sh
+RUN chmod +x /home/agent/entrypoint.sh
+
+ENTRYPOINT ["/home/agent/entrypoint.sh"]

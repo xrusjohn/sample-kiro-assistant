@@ -1,4 +1,15 @@
-# Design Seed: Hot-Reload MCP Tools
+# ✅ SHIPPED — Design Seed: Hot-Reload MCP Tools
+
+> **Status: Implemented.** `restartSession()` in `src/server/session-handler.ts` destroys the
+> existing runner and respawns it with full session history. The new process picks up the latest
+> `agent_config.json` (MCP servers), model settings, and skills. Triggered via
+> `POST /api/sessions/:id/restart` or the "Restart Agent" button in the UI.
+>
+> The open question about `/agent` swap and `/mcp add` remains uninvestigated — the hot-restart
+> approach (kill + respawn with history) turned out to be sufficient.
+
+---
+
 
 ## Problem
 

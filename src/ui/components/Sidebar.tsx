@@ -45,6 +45,8 @@ interface SidebarProps {
   onOpenSettings: () => void;
   onToggleDebug: () => void;
   debugPanelOpen: boolean;
+  onToggleAgents: () => void;
+  agentsPanelOpen: boolean;
 }
 
 export function Sidebar({
@@ -52,7 +54,9 @@ export function Sidebar({
   onDeleteSession,
   onOpenSettings,
   onToggleDebug,
-  debugPanelOpen
+  debugPanelOpen,
+  onToggleAgents,
+  agentsPanelOpen
 }: SidebarProps) {
   const sessions = useAppStore((state) => state.sessions);
   const activeSessionId = useAppStore((state) => state.activeSessionId);
@@ -340,10 +344,20 @@ export function Sidebar({
           🔍 ACP
         </button>
         <button
+          className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+            agentsPanelOpen
+              ? "border-accent/40 bg-accent/10 text-accent"
+              : "border-ink-900/20 bg-surface text-ink-100 hover:border-accent/40 hover:text-accent"
+          }`}
+          onClick={onToggleAgents}
+        >
+          🤖 Agents
+        </button>
+        <button
           className="flex-1 rounded-xl border border-ink-900/20 bg-surface px-4 py-2.5 text-sm font-medium text-ink-100 hover:border-accent/40 hover:text-accent transition-colors"
           onClick={onOpenSettings}
         >
-          ⚙️ Settings
+          ⚙️
         </button>
       </div>
       <ServerStatus />

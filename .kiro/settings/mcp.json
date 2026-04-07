@@ -1,4 +1,15 @@
 {
   "mcpServers": {
+    "power-aws-agentcore-agentcore-mcp-server": {
+      "command": "uvx",
+      "args": [
+        "awslabs.amazon-bedrock-agentcore-mcp-server@latest"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "search_agentcore_docs",
+        "fetch_agentcore_doc"
+      ]
+    }
   }
 }

@@ -8,11 +8,14 @@ import { extname, join, basename, resolve, normalize } from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 
-import { handleClientEvent, sessions, setBroadcast, abortAll, manager, registry, restartSession } from "./session-handler.js";
+import Database from "better-sqlite3";
+import { handleClientEvent, sessions, setBroadcast, abortAll, manager, registry, restartSession, setA2ARegistry } from "./session-handler.js";
 import { createSendToRegistry, createSendToRouter, setSessionHandlerRef } from "./send-to/index.js";
+import { A2ARegistry } from "./a2a-registry.js";
+import { createA2ARouter } from "./a2a-router.js";
+import { DB_PATH, SETTINGS_PATH } from "./paths.js";
 import { generateSessionTitle, normalizeWorkingDirectory, enhancedEnv } from "./util.js";
 import { loadAssistantSettings, saveAssistantSettings } from "./app-settings.js";
-import { SETTINGS_PATH } from "./paths.js";
 import { resolveKiroCliBinary } from "../electron/libs/kiro-cli.js";
 import { getKiroMcpSettingsPath, loadKiroMcpServers, setKiroMcpServerDisabled, ensureAgentConfigDefaults } from "../electron/libs/mcp-config.js";
 import { ensureWorkspaceRoot } from "../electron/libs/workspace.js";
@@ -28,6 +31,11 @@ const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 const upload = multer({ dest: "/tmp/kiro-uploads" });
+
+// A2A Registry — instantiated at module load so the router is registered
+// before the static catch-all handler below.
+const a2aDb = new Database(DB_PATH);
+export const a2aRegistry = new A2ARegistry(a2aDb);
 
 // Health check — registered early so it's not caught by the static/catch-all handler
 const SERVER_BOOT_TIME = Date.now();
@@ -543,6 +551,10 @@ app.get("/downloads/:filename", async (req, res) => {
 
 // --- Serve static React build ---
 const staticDir = join(import.meta.dirname, "../../dist-react");
+
+// A2A routes must be mounted BEFORE the static catch-all
+app.use('/api/a2a', createA2ARouter(a2aRegistry));
+
 app.use(express.static(staticDir));
 app.get("/{*splat}", (_req, res) => {
   const indexPath = join(staticDir, "index.html");
@@ -575,6 +587,10 @@ async function boot() {
   await ensureAgentConfigDefaults(templatePath);
   ensureWorkspaceRoot();
   await registry.checkAvailability();
+
+  a2aRegistry.startHeartbeatSweep();
+  setA2ARegistry(a2aRegistry);
+
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Kiro Assistant Web UI running at http://0.0.0.0:${PORT}`);
   });

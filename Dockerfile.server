@@ -1,4 +1,4 @@
-FROM node:20-slim AS build
+FROM public.ecr.aws/docker/library/node:20-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --ignore-scripts
@@ -7,7 +7,7 @@ COPY tsconfig*.json vite.config.ts index.html ./
 COPY kiro.mp4 kiro.gif ./
 RUN npm run build:web
 
-FROM node:20-slim
+FROM public.ecr.aws/docker/library/node:20-slim
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package*.json ./

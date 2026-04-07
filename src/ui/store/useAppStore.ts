@@ -58,6 +58,9 @@ interface AppState {
   acpDebugLog: AcpDebugEntry[];
   debugPanelOpen: boolean;
 
+  // Agents panel state
+  agentsPanelOpen: boolean;
+
   // File sidebar state
   fileSidebarOpen: boolean;
   fileSidebarWidth: number;
@@ -86,6 +89,9 @@ interface AppState {
   // Debug panel actions
   setDebugPanelOpen: (open: boolean) => void;
   clearAcpDebugLog: () => void;
+
+  // Agents panel actions
+  setAgentsPanelOpen: (open: boolean) => void;
 
   // Agent actions
   setDefaultAgent: (id: string) => void;
@@ -316,6 +322,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   acpDebugLog: [],
   debugPanelOpen: false,
 
+  // Agents panel state
+  agentsPanelOpen: false,
+
   // File sidebar state
   fileSidebarOpen: false,
   fileSidebarWidth: 400,
@@ -409,6 +418,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Debug panel actions
   setDebugPanelOpen: (debugPanelOpen) => set({ debugPanelOpen }),
   clearAcpDebugLog: () => set({ acpDebugLog: [] }),
+
+  // Agents panel actions
+  setAgentsPanelOpen: (agentsPanelOpen) => set({ agentsPanelOpen }),
 
   // Agent actions
   setDefaultAgent: (id) => {

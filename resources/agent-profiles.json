@@ -1,0 +1,115 @@
+[
+  {
+    "id": "coding-assistant",
+    "label": "Coding Assistant",
+    "description": "General-purpose coding agent with file system and terminal access",
+    "platform": "any",
+    "skills": ["coding", "files", "terminal"],
+    "tools": ["filesystem", "terminal"],
+    "tags": ["coding", "files", "terminal"],
+    "cardTemplate": {
+      "name": "Kiro Coding Assistant",
+      "description": "Write, edit, and explain code",
+      "version": "1.0.0",
+      "skills": [
+        { "id": "coding-assistant", "name": "Coding Assistant", "tags": ["coding", "files", "terminal"] }
+      ]
+    }
+  },
+  {
+    "id": "diagram-specialist",
+    "label": "Diagram Specialist",
+    "description": "Generates architecture and flow diagrams",
+    "platform": "any",
+    "skills": ["diagrams", "mermaid", "plantuml"],
+    "tools": ["diagram-mcp"],
+    "tags": ["diagrams", "architecture", "visualization"],
+    "cardTemplate": {
+      "name": "Kiro Diagram Specialist",
+      "description": "Generate Mermaid, PlantUML, and architecture diagrams",
+      "version": "1.0.0",
+      "skills": [
+        { "id": "diagram-specialist", "name": "Diagram Specialist", "tags": ["diagrams", "architecture", "visualization"] }
+      ]
+    }
+  },
+  {
+    "id": "outlook-manager",
+    "label": "Outlook Manager",
+    "description": "Manages email and calendar via Outlook",
+    "platform": "windows",
+    "skills": ["email", "calendar"],
+    "tools": ["outlook-mcp"],
+    "tags": ["email", "calendar", "outlook"],
+    "cardTemplate": {
+      "name": "Kiro Outlook Manager",
+      "description": "Manage email and calendar via Outlook MCP",
+      "version": "1.0.0",
+      "skills": [
+        { "id": "outlook-manager", "name": "Outlook Manager", "tags": ["email", "calendar", "outlook"] }
+      ]
+    }
+  },
+  {
+    "id": "disk-manager",
+    "label": "Disk Manager",
+    "description": "Manages files on Windows or CDM filesystems",
+    "platform": "windows",
+    "skills": ["filesystem", "powershell"],
+    "tools": ["filesystem"],
+    "tags": ["files", "windows", "powershell"],
+    "cardTemplate": {
+      "name": "Kiro Disk Manager",
+      "description": "Manage files and disks on Windows with PowerShell",
+      "version": "1.0.0",
+      "skills": [
+        { "id": "disk-manager", "name": "Disk Manager", "tags": ["files", "windows", "powershell"] }
+      ]
+    }
+  },
+  {
+    "id": "pdf-processor",
+    "label": "PDF Processor",
+    "description": "Extracts and processes PDF content",
+    "platform": "linux",
+    "skills": ["pdf", "extraction"],
+    "tools": ["pdf-mcp"],
+    "tags": ["pdf", "documents", "extraction"],
+    "cardTemplate": {
+      "name": "Kiro PDF Processor",
+      "description": "Extract and process content from PDF documents",
+      "version": "1.0.0",
+      "skills": [
+        { "id": "pdf-processor", "name": "PDF Processor", "tags": ["pdf", "documents", "extraction"] }
+      ]
+    }
+  },
+  {
+    "id": "workshop-researcher",
+    "label": "Workshop Researcher",
+    "description": "Crawls AWS Workshop Studio sites via AgentCore Browser + Playwright CDP, exports pages as HTML and Markdown to S3, then indexes the Markdown into kiro-cli knowledge for instant Q&A. Handles industry variant tabs (e.g. Healthcare).",
+    "platform": "agentcore",
+    "skills": ["workshop-export", "knowledge-indexing", "web-research"],
+    "tools": ["workshop-export-mcp", "knowledge", "aws"],
+    "tags": ["workshop", "aws", "research", "knowledge", "s3", "crawler"],
+    "cardTemplate": {
+      "name": "Kiro Workshop Researcher",
+      "description": "Crawl AWS Workshop Studio sites and index content for Q&A",
+      "version": "1.0.0",
+      "skills": [
+        {
+          "id": "workshop-export",
+          "name": "Workshop Export",
+          "description": "Crawl an AWS Workshop Studio URL and export all pages as HTML + Markdown to S3. Handles industry variant tabs.",
+          "tags": ["workshop", "aws", "crawler", "s3", "export"]
+        },
+        {
+          "id": "workshop-qa",
+          "name": "Workshop Q&A",
+          "description": "Answer questions about a previously exported workshop by querying the indexed knowledge base.",
+          "tags": ["workshop", "knowledge", "research", "qa"]
+        }
+      ]
+    }
+  }
+]

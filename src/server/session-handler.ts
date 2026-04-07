@@ -7,11 +7,34 @@ import { normalizeWorkingDirectory } from "./util.js";
 import { createWorkspaceDirectory } from "../electron/libs/workspace.js";
 import { loadAssistantSettings } from "./app-settings.js";
 import { DEFAULT_MODEL_ID } from "../shared/models.js";
+import type { A2ARegistry } from "./a2a-registry.js";
+import { extractTagsFromPrompt } from "./routing-helper.js";
+import { createA2ARunner } from "./a2a-runner.js";
 
 pullDbFromS3();
 export const sessions = new SessionStore(DB_PATH);
 export const registry = new AgentRegistry();
 export const manager = new RunnerManager(registry);
+
+// A2ARegistry reference — set via setA2ARegistry() from index.ts after boot
+// to avoid circular imports (index.ts imports session-handler.ts).
+let a2aRegistry: A2ARegistry | undefined;
+
+export function setA2ARegistry(reg: A2ARegistry): void {
+  a2aRegistry = reg;
+
+  // 5.4 — When a routed instance goes offline, notify active sessions
+  a2aRegistry.on('agent.offline', ({ id: instanceId }: { id: string }) => {
+    for (const session of sessions.listSessions()) {
+      if ((session as any).routedInstanceId === instanceId) {
+        emit({
+          type: 'session.status',
+          payload: { sessionId: session.id, status: 'agent-offline', instanceId },
+        });
+      }
+    }
+  });
+}
 
 type BroadcastFn = (event: ServerEvent) => void;
 let broadcastFn: BroadcastFn = () => {};
@@ -110,6 +133,72 @@ export function handleClientEvent(event: ClientEvent) {
     const modelId = resolveModelId();
     session.selectedModel = modelId;
 
+    // 5.2 — Capability-based routing: try to find a remote instance before falling back to local
+    const profileId: string | undefined = (event.payload as any).profileId;
+    const tags = extractTagsFromPrompt(event.payload.prompt ?? '');
+    const remoteInstance = a2aRegistry?.findBestInstance(profileId, tags);
+
+    // 5.3 — Log routing decision
+    const matchReason = profileId ? 'explicit-profile' : (tags.length > 0 ? 'tag-match' : 'fallback');
+    console.log(`[routing] session=${session.id} reason=${matchReason} instance=${remoteInstance?.id ?? 'local'}`);
+
+    // Store routed instance ID on session for offline detection (5.4)
+    if (remoteInstance) {
+      (session as any).routedInstanceId = remoteInstance.id;
+
+      // Route to remote A2A agent
+      console.log(`[routing] proxying session=${session.id} to remote instance ${remoteInstance.id} at ${remoteInstance.url}`);
+      const a2aHandle = createA2ARunner({
+        session: session as any,
+        instance: remoteInstance,
+        onEvent: emit,
+        onSessionUpdate: (u) => sessions.updateSession(session.id, u),
+        onFatalError: (reason: string) => {
+          // Mark instance degraded and fall back to local
+          console.log(`[routing] A2A failed for session=${session.id}, reason=${reason} — falling back to local`);
+          a2aRegistry?.markDegraded(remoteInstance.id, reason);
+
+          const localHandle = manager.spawn({
+            session: session as any,
+            model: modelId,
+            agentId,
+            onEvent: emit,
+            onSessionUpdate: (u) => sessions.updateSession(session.id, u)
+          });
+
+          if (!localHandle) {
+            emit({ type: "runner.error", payload: { sessionId: session.id, message: "A2A agent failed and local fallback also failed." } });
+            return;
+          }
+
+          emit({
+            type: 'stream.message',
+            payload: {
+              sessionId: session.id,
+              message: {
+                type: 'assistant',
+                message: { role: 'assistant', content: [{ type: 'text', text: `⚠ Remote agent (${remoteInstance.profileId}) is degraded: ${reason}. Falling back to local.` }] },
+              } as any,
+            },
+          });
+
+          localHandle.sendPrompt(event.payload.prompt);
+        },
+      });
+
+      sessions.updateSession(session.id, { status: "running", lastPrompt: event.payload.prompt });
+      emit({ type: "session.status", payload: { sessionId: session.id, status: "running", title: session.title, cwd: session.cwd } });
+
+      const initialPrompt = event.payload.prompt;
+      setTimeout(() => {
+        emit({ type: "stream.user_prompt", payload: { sessionId: session.id, prompt: initialPrompt } });
+      }, 200);
+
+      a2aHandle.sendPrompt(event.payload.prompt);
+      return;
+    }
+
+    // Fallback to local ACP runner
     const handle = manager.spawn({
       session: session as any,
       model: modelId,

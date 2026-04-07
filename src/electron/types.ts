@@ -18,7 +18,7 @@ export type UserPromptMessage = {
 
 export type StreamMessage = AgentMessage | UserPromptMessage;
 
-export type SessionStatus = "idle" | "running" | "completed" | "error";
+export type SessionStatus = "idle" | "running" | "completed" | "error" | "agent-offline";
 
 export type AgentInfo = {
   id: string;
@@ -42,7 +42,7 @@ export type SessionInfo = {
 export type ServerEvent =
   | { type: "stream.message"; payload: { sessionId: string; message: StreamMessage } }
   | { type: "stream.user_prompt"; payload: { sessionId: string; prompt: string } }
-  | { type: "session.status"; payload: { sessionId: string; status: SessionStatus; title?: string; cwd?: string; error?: string } }
+  | { type: "session.status"; payload: { sessionId: string; status: SessionStatus; title?: string; cwd?: string; error?: string; instanceId?: string } }
   | { type: "session.list"; payload: { sessions: SessionInfo[] } }
   | { type: "session.history"; payload: { sessionId: string; status: SessionStatus; messages: StreamMessage[] } }
   | { type: "session.deleted"; payload: { sessionId: string } }

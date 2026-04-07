@@ -22,6 +22,19 @@ const PORT = parseInt(process.env.PORT ?? "9000", 10);
 const IDLE_TIMEOUT_MS = parseInt(process.env.IDLE_TIMEOUT_MS ?? "900000", 10); // 15 min
 const KIRO_BINARY = process.env.KIRO_BINARY ?? "kiro-cli";
 
+// --- Task 4.1: Registry / self-registration env vars ---
+const A2A_PROFILE = process.env.A2A_PROFILE || null;
+const A2A_SKILLS = process.env.A2A_SKILLS ? process.env.A2A_SKILLS.split(',').map(s => s.trim()) : null;
+const A2A_TAGS = process.env.A2A_TAGS ? process.env.A2A_TAGS.split(',').map(t => t.trim()) : null;
+const A2A_PLATFORM = process.env.A2A_PLATFORM || 'any';
+const A2A_LABEL = process.env.A2A_LABEL || null;
+const ORCHESTRATOR_URL = process.env.ORCHESTRATOR_URL || null;
+const AGENT_PORT = parseInt(process.env.AGENT_PORT || String(PORT), 10);
+
+// Module-scope registry state
+let registeredId = null;
+let heartbeatInterval = null;
+
 // --- ACP session state ---
 const sessions = new Map(); // sessionId → AcpSession
 
@@ -40,6 +53,7 @@ class AcpSession {
   }
 
   _startBridge() {
+    this._stderrBuf = '';
     this._child = spawn(
       KIRO_BINARY,
       ["acp", "--agent", "kiro-assistant", "--trust-all-tools"],
@@ -56,8 +70,16 @@ class AcpSession {
       }
     });
 
-    this._child.on("close", () => {
-      for (const [, p] of this._pending) p.reject(new Error("ACP process exited"));
+    this._child.stderr.on("data", (data) => {
+      const text = data.toString();
+      this._stderrBuf += text;
+      console.error(`[a2a:${this.sessionId.slice(0,8)}:stderr] ${text.trimEnd()}`);
+    });
+
+    this._child.on("close", (code) => {
+      const reason = this._stderrBuf.trim() || `exit code ${code}`;
+      console.error(`[a2a:${this.sessionId.slice(0,8)}] ACP process exited: ${reason}`);
+      for (const [, p] of this._pending) p.reject(new Error(`ACP process exited: ${reason}`));
       this._pending.clear();
       sessions.delete(this.sessionId);
     });
@@ -187,8 +209,10 @@ setInterval(() => {
   }
 }, 60_000);
 
-// --- HTTP server ---
-const AGENT_CARD = {
+// --- Task 4.2: Dynamic AgentCard building ---
+
+// Default card — used when no profile is configured
+const DEFAULT_AGENT_CARD = {
   name: "Kiro Assistant",
   description: "Kiro CLI agent — coding assistant with file system and terminal access",
   version: "1.0.0",
@@ -205,6 +229,71 @@ const AGENT_CARD = {
   }],
 };
 
+// Mutable card — served at /.well-known/agent-card.json; updated by rebuildAgentCard()
+let agentCard = { ...DEFAULT_AGENT_CARD };
+
+/**
+ * Fetch the profile template from the orchestrator catalog and build the card.
+ * Falls back to DEFAULT_AGENT_CARD if the profile cannot be resolved.
+ */
+async function buildAgentCard() {
+  let card = { ...DEFAULT_AGENT_CARD };
+
+  // Try to load profile template from orchestrator catalog
+  if (A2A_PROFILE && ORCHESTRATOR_URL) {
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/api/a2a/profiles`);
+      if (res.ok) {
+        const profiles = await res.json();
+        const profile = profiles.find(p => p.id === A2A_PROFILE);
+        if (profile?.cardTemplate) {
+          card = {
+            ...DEFAULT_AGENT_CARD,
+            ...profile.cardTemplate,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[a2a] Could not fetch profile template:', err.message);
+    }
+  }
+
+  // Apply A2A_SKILLS override — replace skills array with generated entries
+  if (A2A_SKILLS) {
+    card.skills = A2A_SKILLS.map(skillId => ({
+      id: skillId,
+      name: skillId.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+      tags: A2A_TAGS ?? card.skills?.[0]?.tags ?? [],
+    }));
+  }
+
+  // Apply A2A_TAGS override to first skill's tags (when skills not fully overridden)
+  if (A2A_TAGS && !A2A_SKILLS && card.skills?.length > 0) {
+    card.skills = card.skills.map(skill => ({ ...skill, tags: A2A_TAGS }));
+  }
+
+  // Apply A2A_LABEL override
+  if (A2A_LABEL) {
+    card.name = A2A_LABEL;
+  }
+
+  // Set platform field
+  card.platform = A2A_PLATFORM;
+
+  return card;
+}
+
+/**
+ * Rebuild the in-memory agentCard from current env vars.
+ * Called on startup and on agent.restart signal.
+ */
+async function rebuildAgentCard() {
+  agentCard = await buildAgentCard();
+  console.log(`[a2a] AgentCard updated: name="${agentCard.name}", platform="${agentCard.platform}"`);
+}
+
+// --- HTTP server ---
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/ping") {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -214,7 +303,7 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && req.url === "/.well-known/agent-card.json") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(AGENT_CARD));
+    res.end(JSON.stringify(agentCard));
     return;
   }
 
@@ -295,6 +384,115 @@ const server = http.createServer(async (req, res) => {
   res.end();
 });
 
-server.listen(PORT, "0.0.0.0", () => {
+// --- Task 4.4: Heartbeat ---
+
+/**
+ * Start sending periodic heartbeats to the orchestrator registry.
+ * If the registry returns 404, the instance was evicted — re-register.
+ */
+function startHeartbeat(instanceId) {
+  heartbeatInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/api/a2a/registry/${instanceId}/heartbeat`, { method: 'PUT' });
+      if (!res.ok) {
+        console.warn('[a2a] Heartbeat failed:', res.status);
+        if (res.status === 404) {
+          clearInterval(heartbeatInterval);
+          heartbeatInterval = null;
+          registeredId = null;
+          selfRegister();
+        }
+      }
+    } catch (err) {
+      console.warn('[a2a] Heartbeat error:', err.message);
+    }
+  }, 30_000);
+  return heartbeatInterval;
+}
+
+// --- Task 4.6: Event listener (polling for agent.restart) ---
+
+/**
+ * Poll the config endpoint every 30s for restart signals.
+ * On receipt, rebuild the AgentCard from env vars without a full process restart.
+ */
+function startEventListener(instanceId) {
+  setInterval(async () => {
+    try {
+      const res = await fetch(`${ORCHESTRATOR_URL}/api/a2a/registry/${instanceId}/config`);
+      if (!res.ok) return;
+      const config = await res.json();
+      if (config.restart === true) {
+        console.log('[a2a] Restart signal received, reloading config...');
+        // Clear the restart flag so we don't loop
+        await fetch(`${ORCHESTRATOR_URL}/api/a2a/registry/${instanceId}/config`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ restart: false }),
+        });
+        // Rebuild the in-memory AgentCard from env vars
+        await rebuildAgentCard();
+      }
+    } catch {
+      // Silently ignore — orchestrator may be temporarily unreachable
+    }
+  }, 30_000);
+}
+
+// --- Task 4.3: Self-registration ---
+
+/**
+ * Register this adapter instance with the orchestrator registry.
+ * Stores the returned id and starts the heartbeat + event listener loops.
+ * Retries automatically after 30s on failure.
+ */
+async function selfRegister() {
+  if (!ORCHESTRATOR_URL) return;
+  const url = `http://localhost:${PORT}`;
+  try {
+    const res = await fetch(`${ORCHESTRATOR_URL}/api/a2a/registry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        profileId: A2A_PROFILE || 'coding-assistant',
+        platform: A2A_PLATFORM,
+        metadata: { label: A2A_LABEL },
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    registeredId = data.id;
+    console.log(`[a2a] Registered with orchestrator, id=${registeredId}`);
+    startHeartbeat(registeredId);
+    startEventListener(registeredId);
+  } catch (err) {
+    console.warn('[a2a] Self-registration failed:', err.message);
+    // Retry after one heartbeat interval
+    setTimeout(selfRegister, 30_000);
+  }
+}
+
+// --- Task 4.5: SIGTERM handler ---
+
+process.on('SIGTERM', async () => {
+  if (registeredId && ORCHESTRATOR_URL) {
+    try {
+      await fetch(`${ORCHESTRATOR_URL}/api/a2a/registry/${registeredId}`, { method: 'DELETE' });
+      console.log(`[a2a] Deregistered instance ${registeredId}`);
+    } catch {
+      // Best-effort — don't block shutdown
+    }
+  }
+  process.exit(0);
+});
+
+// --- Startup sequence ---
+
+server.listen(PORT, "0.0.0.0", async () => {
   console.log(`[a2a] Listening on port ${PORT}`);
+  // Build the dynamic AgentCard before registering so the registry fetches the right card
+  await rebuildAgentCard();
+  // Self-register with the orchestrator if configured
+  await selfRegister();
 });
