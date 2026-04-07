@@ -119,7 +119,12 @@ export function createAcpRunner(opts: {
       onEvent({ type: "stream.message", payload: { sessionId: session.id, message: { type: "stream_event", event: { type: "content_block_stop" } } as any } });
       streamingStarted = false;
     }
-    if (accumulatedText) {
+    // Only emit the final assistant message if we didn't stream it
+    // (streaming chunks already displayed the text in the UI)
+    if (accumulatedText && !streamingStarted) {
+      // streamingStarted was true and just got set to false above — means we streamed.
+      // Still emit the assistant message for persistence (session history) but mark it
+      // so the UI can deduplicate.
       onEvent({
         type: "stream.message",
         payload: {
@@ -127,7 +132,8 @@ export function createAcpRunner(opts: {
           message: {
             type: "assistant",
             message: { id: crypto.randomUUID(), role: "assistant", content: [{ type: "text", text: accumulatedText }] },
-            model, session_id: session.id, uuid: crypto.randomUUID()
+            model, session_id: session.id, uuid: crypto.randomUUID(),
+            _streamed: true,
           } as any
         }
       });
