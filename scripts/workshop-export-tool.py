@@ -178,6 +178,17 @@ async def crawl_workshop(url, bucket, prefix, fmt, variant, max_depth):
             await page.wait_for_selector('article', timeout=15000)
             await asyncio.sleep(2)
 
+            # Extract workshop title from breadcrumbs / header
+            workshop_title = await page.evaluate("""
+            () => {
+              const bc = document.querySelector('nav[aria-label="Breadcrumb"] li:last-child');
+              if (bc) return bc.textContent.trim();
+              const h1 = document.querySelector('article h1');
+              if (h1) return h1.textContent.trim();
+              return '';
+            }
+            """)
+
             nav_raw = await page.evaluate(DISCOVER_NAV_JS)
             all_pages = json.loads(nav_raw)
 
@@ -242,11 +253,12 @@ async def crawl_workshop(url, bucket, prefix, fmt, variant, max_depth):
             f'<li><a href="{r["slug"]}.{ext}">{r["title"]}</a></li>'
             for r in results if not r.get("error")
         )
+        index_title = workshop_title or 'Workshop Export'
         index = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Workshop Export</title>
+<title>{index_title}</title>
 <style>body{{max-width:700px;margin:2rem auto;font-family:sans-serif;line-height:1.8}}
 a{{color:#0073bb}}</style></head>
-<body><h1>Workshop Export</h1><p>Source: <a href="{url}">{url}</a></p>
+<body><h1>{index_title}</h1><p>Source: <a href="{url}">{url}</a></p>
 <p>Exported: {datetime.now(timezone.utc).isoformat()}</p>
 <p>Variant: {variant or 'default'} | Format: {fmt} | Pages: {len(results)}</p>
 <ul>{links}</ul></body></html>"""
@@ -263,6 +275,7 @@ a{{color:#0073bb}}</style></head>
         client.stop()
 
     return {
+        "workshop_title": workshop_title or None,
         "pages_exported": len([r for r in results if not r.get("error")]),
         "pages_failed": len([r for r in results if r.get("error")]),
         "total_pages": total,
