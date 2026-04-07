@@ -544,28 +544,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       case "stream.message": {
         const { sessionId, message } = event.payload;
 
-        // Skip assistant messages that were already shown via streaming chunks
-        if ((message as any)._streamed && (message as any).type === 'assistant') {
-          // Still extract files but don't add to visible messages
-          const currentState = get();
-          const existingSession = currentState.sessions[sessionId];
-          const cwdForDetection = existingSession?.cwd;
-          const newFiles = extractFilesFromMessage(message, sessionId, cwdForDetection);
-          if (newFiles.length > 0) {
-            set((state) => {
-              const existing = state.sessions[sessionId] ?? createSession(sessionId);
-              const updatedFiles = [...existing.createdFiles];
-              for (const newFile of newFiles) {
-                const index = updatedFiles.findIndex(f => f.path === newFile.path);
-                if (index === -1) { updatedFiles.push(newFile); continue; }
-                if (shouldReplaceFile(updatedFiles[index], newFile)) { updatedFiles[index] = newFile; }
-              }
-              return { sessions: { ...state.sessions, [sessionId]: { ...existing, createdFiles: updatedFiles } } };
-            });
-          }
-          break;
-        }
-
         const currentState = get();
         const existingSession = currentState.sessions[sessionId];
         const cwdForDetection = existingSession?.cwd;

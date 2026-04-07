@@ -331,6 +331,7 @@ export function createAcpRunner(opts: {
       aborted = true;
       if (acpSessionId) writeRpc("session/cancel", { sessionId: acpSessionId });
       setTimeout(() => child.kill("SIGINT"), 500);
+      setTimeout(() => { try { child.kill("SIGKILL"); } catch {} }, 3000);
     },
     onClose(callback: (code: number | null) => void) {
       closeCallbacks.push(callback);

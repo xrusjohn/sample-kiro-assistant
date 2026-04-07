@@ -281,7 +281,7 @@ export function handleClientEvent(event: ClientEvent) {
   if (event.type === "session.stop") {
     const session = sessions.getSession(event.payload.sessionId);
     if (!session) return;
-    manager.markIdle(session.id);
+    manager.destroy(session.id);
     sessions.updateSession(session.id, { status: "idle" });
     emit({ type: "session.status", payload: { sessionId: session.id, status: "idle", title: session.title, cwd: session.cwd } });
     return;

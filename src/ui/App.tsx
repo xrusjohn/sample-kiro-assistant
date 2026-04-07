@@ -246,11 +246,9 @@ function App() {
     }
 
     if (eventType === "content_block_stop") {
+      // Keep partial visible — it will be hidden once session goes idle
+      // (the final assistant message in the messages array replaces it)
       setShowPartialMessage(false);
-      setTimeout(() => {
-        partialMessageRef.current = "";
-        setPartialMessage(partialMessageRef.current);
-      }, 500);
     }
   }, []);
 
@@ -258,6 +256,15 @@ function App() {
   const onEvent = useCallback((event: ServerEvent) => {
     handleServerEvent(event);
     handlePartialMessages(event);
+
+    // Clear partial when final assistant message lands in the store
+    if (event.type === 'stream.message') {
+      const msg = (event.payload as any)?.message;
+      if (msg?.type === 'assistant') {
+        partialMessageRef.current = "";
+        setPartialMessage("");
+      }
+    }
   }, [handleServerEvent, handlePartialMessages]);
 
   const { connected, sendEvent } = useIPC(onEvent);
@@ -521,28 +528,27 @@ function App() {
             )}
 
             {/* Partial message display with skeleton loading */}
+            {partialMessage && (
             <div className="partial-message">
-              <MDContent text={partialMessage} />
-              {showPartialMessage && (
-                <div className="mt-3 flex flex-col gap-2 px-1">
-                  <div className="relative h-3 w-2/12 overflow-hidden rounded-full bg-ink-900/10">
-                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-ink-900/30 to-transparent animate-shimmer" />
-                  </div>
-                  <div className="relative h-3 w-full overflow-hidden rounded-full bg-ink-900/10">
-                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-ink-900/30 to-transparent animate-shimmer" />
-                  </div>
-                  <div className="relative h-3 w-full overflow-hidden rounded-full bg-ink-900/10">
-                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-ink-900/30 to-transparent animate-shimmer" />
-                  </div>
-                  <div className="relative h-3 w-full overflow-hidden rounded-full bg-ink-900/10">
-                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-ink-900/30 to-transparent animate-shimmer" />
-                  </div>
-                  <div className="relative h-3 w-4/12 overflow-hidden rounded-full bg-ink-900/10">
-                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-ink-900/30 to-transparent animate-shimmer" />
+              <div className="flex items-start gap-3 mt-6">
+                <div className="flex flex-col items-center gap-1 shrink-0 pt-1">
+                  <span className="w-8 h-8 rounded-full bg-emerald-600/20 flex items-center justify-center text-sm">🤖</span>
+                </div>
+                <div className="min-w-0 flex-1 max-w-[85%]">
+                  <div className="rounded-2xl bg-surface-secondary/80 px-5 py-3.5">
+                    <MDContent text={partialMessage} />
                   </div>
                 </div>
+              </div>
+              {showPartialMessage && (
+                <span className="inline-flex items-center gap-1 ml-12 mt-1 text-ink-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-500 animate-bounce" style={{animationDelay: '0ms'}} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-500 animate-bounce" style={{animationDelay: '150ms'}} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-500 animate-bounce" style={{animationDelay: '300ms'}} />
+                </span>
               )}
             </div>
+            )}
 
             <div ref={messagesEndRef} />
           </div>
