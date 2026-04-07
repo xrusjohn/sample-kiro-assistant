@@ -179,6 +179,35 @@ export class A2ARegistry extends EventEmitter {
   }
 
   // ---------------------------------------------------------------------------
+  // Register WS agent (card provided directly, no HTTP fetch)
+  // ---------------------------------------------------------------------------
+  registerWs(params: {
+    profileId: string;
+    platform: Platform;
+    card: AgentCard;
+    metadata?: Record<string, unknown>;
+  }): { id: string; registeredAt: number } {
+    const { profileId, platform, card, metadata = {} } = params;
+    const now = Date.now();
+    const id = randomUUID();
+    const instance: AgentInstance = {
+      id,
+      profileId,
+      url: `ws-agent://${id}`,
+      platform,
+      card,
+      metadata,
+      registeredAt: now,
+      lastSeen: now,
+      status: 'online',
+      transport: 'ws',
+    };
+    this.instances.set(id, instance);
+    this._upsertDb(instance);
+    return { id, registeredAt: now };
+  }
+
+  // ---------------------------------------------------------------------------
   // Deregister (2.4)
   // ---------------------------------------------------------------------------
 

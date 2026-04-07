@@ -23,6 +23,8 @@ export interface AgentProfile {
   cardTemplate: AgentCard;
 }
 
+export type Transport = 'http' | 'ws';
+
 export interface AgentInstance {
   id: string;
   profileId: string;
@@ -34,6 +36,7 @@ export interface AgentInstance {
   lastSeen: number;     // epoch ms
   status: InstanceStatus;
   degradedReason?: string;  // e.g. 'credentials-expired', 'acp-crashed'
+  transport?: Transport;    // 'http' (default/legacy) or 'ws' (remote agent)
 }
 
 export interface CoverageEntry {

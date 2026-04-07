@@ -10,6 +10,7 @@ import { DEFAULT_MODEL_ID } from "../shared/models.js";
 import type { A2ARegistry } from "./a2a-registry.js";
 import { extractTagsFromPrompt } from "./routing-helper.js";
 import { createA2ARunner } from "./a2a-runner.js";
+import { createWsAgentRunner } from "./ws-agent-runner.js";
 
 pullDbFromS3();
 export const sessions = new SessionStore(DB_PATH);
@@ -146,7 +147,28 @@ export function handleClientEvent(event: ClientEvent) {
     if (remoteInstance) {
       (session as any).routedInstanceId = remoteInstance.id;
 
-      // Route to remote A2A agent
+      // Route to WS agent
+      if (remoteInstance.transport === 'ws') {
+        console.log(`[routing] proxying session=${session.id} to WS agent ${remoteInstance.id}`);
+        const wsHandle = createWsAgentRunner({
+          instanceId: remoteInstance.id,
+          sessionId: session.id,
+          onEvent: emit,
+        });
+
+        sessions.updateSession(session.id, { status: "running", lastPrompt: event.payload.prompt });
+        emit({ type: "session.status", payload: { sessionId: session.id, status: "running", title: session.title, cwd: session.cwd } });
+
+        const initialPrompt = event.payload.prompt;
+        setTimeout(() => {
+          emit({ type: "stream.user_prompt", payload: { sessionId: session.id, prompt: initialPrompt, source: (event.payload as any).source } });
+        }, 200);
+
+        wsHandle.sendPrompt(event.payload.prompt);
+        return;
+      }
+
+      // Route to remote A2A HTTP agent
       console.log(`[routing] proxying session=${session.id} to remote instance ${remoteInstance.id} at ${remoteInstance.url}`);
       const a2aHandle = createA2ARunner({
         session: session as any,

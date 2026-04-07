@@ -13,6 +13,7 @@ import { handleClientEvent, sessions, setBroadcast, abortAll, manager, registry,
 import { createSendToRegistry, createSendToRouter, setSessionHandlerRef } from "./send-to/index.js";
 import { A2ARegistry } from "./a2a-registry.js";
 import { createA2ARouter } from "./a2a-router.js";
+import { handleAgentConnection } from "./ws-agent-handler.js";
 import { DB_PATH, SETTINGS_PATH } from "./paths.js";
 import { generateSessionTitle, normalizeWorkingDirectory, enhancedEnv } from "./util.js";
 import { loadAssistantSettings, saveAssistantSettings } from "./app-settings.js";
@@ -29,7 +30,19 @@ const execAsync = promisify(exec);
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const app = express();
 const server = createServer(app);
-const wss = new WebSocketServer({ server, path: "/ws" });
+const wss = new WebSocketServer({ noServer: true });
+const wssAgents = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+  const pathname = new URL(request.url || '', `http://${request.headers.host}`).pathname;
+  if (pathname === '/ws/agent') {
+    wssAgents.handleUpgrade(request, socket, head, (ws) => wssAgents.emit('connection', ws, request));
+  } else if (pathname === '/ws') {
+    wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+  } else {
+    socket.destroy();
+  }
+});
 const upload = multer({ dest: "/tmp/kiro-uploads" });
 
 // A2A Registry — instantiated at module load so the router is registered
@@ -590,6 +603,9 @@ async function boot() {
 
   a2aRegistry.startHeartbeatSweep();
   setA2ARegistry(a2aRegistry);
+
+  // Remote agent WS connections
+  wssAgents.on("connection", (ws) => handleAgentConnection(ws, a2aRegistry));
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Kiro Assistant Web UI running at http://0.0.0.0:${PORT}`);
