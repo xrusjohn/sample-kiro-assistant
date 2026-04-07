@@ -98,7 +98,7 @@ async function launchSubAgent(
     },
     overrides: {
       containerOverrides: [{
-        name: "subagent",
+        name: process.env.ECS_SUBAGENT_CONTAINER_NAME ?? "kiro-subagent",
         environment: envOverrides,
       }],
     },
