@@ -402,7 +402,8 @@ export class A2ARegistry extends EventEmitter {
         }
 
         // Active probe — send a lightweight message/send to check the ACP process
-        if (instance.status === 'online') {
+        // Skip WS agents — they're kept alive by their own heartbeat over the WS connection
+        if (instance.status === 'online' && instance.transport !== 'ws') {
           this._probeInstance(instance).catch(() => {});
         }
       }

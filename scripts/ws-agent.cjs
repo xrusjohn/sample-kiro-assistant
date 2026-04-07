@@ -54,7 +54,9 @@ function executeTask(taskId, prompt) {
 
   // Use claude CLI in print mode for simple prompt→response
   const isWindows = os.platform() === 'win32';
-  const child = spawn(binary, ['--print', prompt], {
+  const useKiro = binary.includes('kiro');
+  const args = useKiro ? ['chat', prompt] : ['--print', prompt];
+  const child = spawn(binary, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: isWindows,
     env: { ...process.env, NO_COLOR: '1' },
