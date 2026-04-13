@@ -9,7 +9,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 
 import Database from "better-sqlite3";
-import { handleClientEvent, sessions, setBroadcast, abortAll, manager, registry, restartSession, setA2ARegistry } from "./session-handler.js";
+import { handleClientEvent, sessions, setBroadcast, abortAll, manager, registry, restartSession, setA2ARegistry, addSessionListener } from "./session-handler.js";
 import { createSendToRegistry, createSendToRouter, setSessionHandlerRef } from "./send-to/index.js";
 import { A2ARegistry } from "./a2a-registry.js";
 import { createA2ARouter } from "./a2a-router.js";
@@ -88,6 +88,89 @@ wss.on("connection", async (ws) => {
 
 // --- REST API ---
 app.use(express.json({ limit: "50mb" }));
+
+// --- AG-UI endpoint (SSE) ---
+import { createAgUiAdapter } from "./ag-ui-adapter.js";
+import type { RunAgentInput } from "./ag-ui-types.js";
+import crypto from "node:crypto";
+
+app.post("/ag-ui/run", (req, res) => {
+  const input = req.body as RunAgentInput;
+  if (!input?.prompt) { res.status(400).json({ error: "prompt required" }); return; }
+
+  const runId = crypto.randomUUID();
+
+  // SSE headers
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.flushHeaders();
+
+  let closed = false;
+  const sendEvent = (agUiEvent: any) => {
+    if (closed) return;
+    res.write(`data: ${JSON.stringify(agUiEvent)}\n\n`);
+  };
+  const finish = () => { if (!closed) { closed = true; res.end(); } };
+
+  // For continue, we know the session ID
+  if (input.threadId) {
+    const adapter = createAgUiAdapter(input.threadId, runId);
+    const remove = addSessionListener(input.threadId, (event) => {
+      for (const e of adapter.translate(event)) {
+        sendEvent(e);
+        if (e.type === "RUN_FINISHED" || e.type === "RUN_ERROR") setTimeout(() => { remove(); finish(); }, 100);
+      }
+    });
+    req.on("close", () => { remove(); closed = true; });
+    handleClientEvent({ type: "session.continue", payload: { sessionId: input.threadId, prompt: input.prompt } });
+    return;
+  }
+
+  // For new sessions: snapshot IDs, create session, find new ID, register listener
+  const before = new Set(sessions.listSessions().map(s => s.id));
+  handleClientEvent({
+    type: "session.start",
+    payload: {
+      title: input.prompt.slice(0, 64),
+      prompt: input.prompt,
+      cwd: input.cwd,
+      agentId: input.agentId,
+      ...(input.profileId ? { profileId: input.profileId } : {}),
+    },
+  } as any);
+  const after = sessions.listSessions().map(s => s.id);
+  const newId = after.find(id => !before.has(id));
+  if (!newId) { sendEvent({ type: "RUN_ERROR", runId, message: "Failed to create session" }); finish(); return; }
+
+  // Session exists — register listener. The ACP runner emits a "Connecting..." turn
+  // (running → idle) before the actual prompt response. We skip that first cycle.
+  const adapter = createAgUiAdapter(newId, runId);
+  sendEvent({ type: "CUSTOM", name: "thread.created", value: { threadId: newId }, runId, timestamp: Date.now() });
+  sendEvent({ type: "RUN_STARTED", threadId: newId, runId, timestamp: Date.now() });
+
+  let initPhase = true;
+  const remove = addSessionListener(newId, (event) => {
+    if (initPhase) {
+      if (event.type === "session.status" && event.payload.status === "idle") {
+        initPhase = false;
+        console.log(`[ag-ui] init phase complete for ${newId.slice(0,8)}`);
+      }
+      return;
+    }
+    const translated = adapter.translate(event);
+    console.log(`[ag-ui] translating ${event.type} → ${translated.length} AG-UI events`);
+    for (const e of translated) {
+      if (e.type === "RUN_STARTED") continue;
+      sendEvent(e);
+      if (e.type === "RUN_FINISHED" || e.type === "RUN_ERROR") setTimeout(() => { remove(); finish(); }, 100);
+    }
+  });
+  req.on("close", () => { remove(); closed = true; });
+});
 
 // --- Widgets toggle ---
 let widgetsEnabled = process.env.KIRO_WIDGETS !== "0";
