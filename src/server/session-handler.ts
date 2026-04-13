@@ -45,11 +45,17 @@ export function setBroadcast(fn: BroadcastFn) { broadcastFn = fn; }
 // Per-session event listeners (used by AG-UI SSE endpoint)
 type SessionListener = (event: ServerEvent) => void;
 const sessionListeners = new Map<string, Set<SessionListener>>();
+const globalListeners = new Set<SessionListener>();
 
 export function addSessionListener(sessionId: string, fn: SessionListener): () => void {
   if (!sessionListeners.has(sessionId)) sessionListeners.set(sessionId, new Set());
   sessionListeners.get(sessionId)!.add(fn);
   return () => { sessionListeners.get(sessionId)?.delete(fn); };
+}
+
+export function addGlobalListener(fn: SessionListener): () => void {
+  globalListeners.add(fn);
+  return () => { globalListeners.delete(fn); };
 }
 
 export function abortAll() { manager.abortAll(); }
@@ -96,6 +102,7 @@ function emit(event: ServerEvent) {
   // Notify per-session listeners (AG-UI SSE)
   const sid = (event.payload as any)?.sessionId;
   if (sid) sessionListeners.get(sid)?.forEach(fn => fn(event));
+  globalListeners.forEach(fn => fn(event));
 }
 
 export function handleClientEvent(event: ClientEvent) {

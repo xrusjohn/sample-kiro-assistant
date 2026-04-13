@@ -10,8 +10,10 @@ import type { ServerEvent } from "../electron/types.js";
 import crypto from "node:crypto";
 
 /** Stateful adapter for one run (one prompt → response cycle). */
-export function createAgUiAdapter(threadId: string, runId: string) {
+export function createAgUiAdapter(threadId: string, runId: string, opts?: { skipFirstIdle?: boolean }) {
   let currentMessageId: string | null = null;
+  let idleCount = 0;
+  const skipFirstIdle = opts?.skipFirstIdle ?? false;
 
   /** Translate a ServerEvent into AG-UI events (0 or more). */
   function translate(event: ServerEvent): AgUiEvent[] {
@@ -22,7 +24,11 @@ export function createAgUiAdapter(threadId: string, runId: string) {
     if (event.type === "session.status") {
       const { status, error } = event.payload;
       if (status === "running") return [{ ...base, type: EventType.RUN_STARTED }];
-      if (status === "idle")    return [{ ...base, type: EventType.RUN_FINISHED }];
+      if (status === "idle") {
+        idleCount++;
+        if (skipFirstIdle && idleCount === 1) return []; // Skip "Connecting..." turn end
+        return [{ ...base, type: EventType.RUN_FINISHED }];
+      }
       if (status === "error")   return [{ ...base, type: EventType.RUN_ERROR, message: error || "Unknown error" }];
       return [];
     }

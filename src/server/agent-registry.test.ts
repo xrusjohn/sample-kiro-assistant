@@ -49,13 +49,16 @@ describe("AgentRegistry", () => {
     await registry.checkAvailability();
 
     const all = registry.getAll();
-    expect(all).toHaveLength(2);
+    expect(all).toHaveLength(3);
     expect(all[0].id).toBe("kiro");
     expect(all[0].available).toBe(true);
     expect(all[0].resolvedBinary).toBe("/usr/bin/kiro-cli");
-    expect(all[1].id).toBe("claude-code");
+    expect(all[1].id).toBe("relay-lite");
     expect(all[1].available).toBe(true);
-    expect(all[1].resolvedBinary).toBe("/usr/bin/claude-agent-acp");
+    expect(all[1].resolvedBinary).toBe("/usr/bin/kiro-cli");
+    expect(all[2].id).toBe("claude-code");
+    expect(all[2].available).toBe(true);
+    expect(all[2].resolvedBinary).toBe("/usr/bin/claude-agent-acp");
   });
 
   it("marks agents as unavailable when binaries are not found", async () => {

@@ -30,6 +30,13 @@ const AGENT_DEFINITIONS: Omit<AgentDefinition, "available" | "resolvedBinary">[]
     defaultArgs: ["acp", "--agent", "kiro-assistant", "--trust-all-tools"],
   },
   {
+    id: "relay-lite",
+    label: "Relay Lite",
+    binaryEnvVar: "KIRO_BINARY",
+    defaultBinary: "kiro-cli",
+    defaultArgs: ["acp", "--agent", "relay-lite", "--trust-all-tools"],
+  },
+  {
     id: "claude-code",
     label: "Claude Code",
     binaryEnvVar: "CLAUDE_BINARY",

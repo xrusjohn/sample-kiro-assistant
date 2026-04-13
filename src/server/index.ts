@@ -9,7 +9,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 
 import Database from "better-sqlite3";
-import { handleClientEvent, sessions, setBroadcast, abortAll, manager, registry, restartSession, setA2ARegistry, addSessionListener } from "./session-handler.js";
+import { handleClientEvent, sessions, setBroadcast, abortAll, manager, registry, restartSession, setA2ARegistry, addSessionListener, addGlobalListener } from "./session-handler.js";
 import { createSendToRegistry, createSendToRouter, setSessionHandlerRef } from "./send-to/index.js";
 import { A2ARegistry } from "./a2a-registry.js";
 import { createA2ARouter } from "./a2a-router.js";
@@ -130,8 +130,41 @@ app.post("/ag-ui/run", (req, res) => {
     return;
   }
 
-  // For new sessions: snapshot IDs, create session, find new ID, register listener
-  const before = new Set(sessions.listSessions().map(s => s.id));
+  // For new sessions: register a global listener BEFORE creating the session
+  // so we catch all events including the fast ones during ACP init.
+  let sessionId: string | null = null;
+  let adapter: ReturnType<typeof createAgUiAdapter> | null = null;
+  let removeGlobal: (() => void) | null = null;
+
+  removeGlobal = addGlobalListener((event) => {
+    const sid = (event.payload as any)?.sessionId;
+    if (!sid) return;
+
+    // Lock onto the session ID from the first event we see after creation
+    if (!sessionId) {
+      // Verify this is a new session (not an existing one)
+      const before = knownSessionIds;
+      if (before.has(sid)) return;
+      sessionId = sid;
+      adapter = createAgUiAdapter(sid, runId, { skipFirstIdle: true });
+      sendEvent({ type: "CUSTOM", name: "thread.created", value: { threadId: sid }, runId, timestamp: Date.now() });
+    }
+
+    if (sid !== sessionId || !adapter) return;
+
+    for (const e of adapter.translate(event)) {
+      sendEvent(e);
+      if (e.type === "RUN_FINISHED" || e.type === "RUN_ERROR") {
+        setTimeout(() => { removeGlobal?.(); finish(); }, 100);
+      }
+    }
+  });
+
+  req.on("close", () => { removeGlobal?.(); closed = true; });
+
+  // Snapshot existing session IDs so we can identify the new one
+  const knownSessionIds = new Set(sessions.listSessions().map(s => s.id));
+
   handleClientEvent({
     type: "session.start",
     payload: {
@@ -142,34 +175,6 @@ app.post("/ag-ui/run", (req, res) => {
       ...(input.profileId ? { profileId: input.profileId } : {}),
     },
   } as any);
-  const after = sessions.listSessions().map(s => s.id);
-  const newId = after.find(id => !before.has(id));
-  if (!newId) { sendEvent({ type: "RUN_ERROR", runId, message: "Failed to create session" }); finish(); return; }
-
-  // Session exists — register listener. The ACP runner emits a "Connecting..." turn
-  // (running → idle) before the actual prompt response. We skip that first cycle.
-  const adapter = createAgUiAdapter(newId, runId);
-  sendEvent({ type: "CUSTOM", name: "thread.created", value: { threadId: newId }, runId, timestamp: Date.now() });
-  sendEvent({ type: "RUN_STARTED", threadId: newId, runId, timestamp: Date.now() });
-
-  let initPhase = true;
-  const remove = addSessionListener(newId, (event) => {
-    if (initPhase) {
-      if (event.type === "session.status" && event.payload.status === "idle") {
-        initPhase = false;
-        console.log(`[ag-ui] init phase complete for ${newId.slice(0,8)}`);
-      }
-      return;
-    }
-    const translated = adapter.translate(event);
-    console.log(`[ag-ui] translating ${event.type} → ${translated.length} AG-UI events`);
-    for (const e of translated) {
-      if (e.type === "RUN_STARTED") continue;
-      sendEvent(e);
-      if (e.type === "RUN_FINISHED" || e.type === "RUN_ERROR") setTimeout(() => { remove(); finish(); }, 100);
-    }
-  });
-  req.on("close", () => { remove(); closed = true; });
 });
 
 // --- Widgets toggle ---
